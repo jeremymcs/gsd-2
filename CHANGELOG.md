@@ -6,6 +6,14 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.4] - 2026-03-11
+
+### Added
+- CHANGELOG.md with curated history from v0.1.6 onwards
+- Project-local `/publish-version` command for npm releases
+- GitHub Sponsors funding configuration
+- npm publish and install smoke test
+
 ## [0.3.3] - 2026-03-11
 
 ### Added
@@ -107,7 +115,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - License updated to MIT
 
-[Unreleased]: https://github.com/gsd-build/gsd-2/compare/v0.3.3...HEAD
+[Unreleased]: https://github.com/gsd-build/gsd-2/compare/v2.3.4...HEAD
+[2.3.4]: https://github.com/gsd-build/gsd-2/compare/v0.3.3...v2.3.4
 [0.3.3]: https://github.com/gsd-build/gsd-2/compare/v0.3.1...v0.3.3
 [0.3.1]: https://github.com/gsd-build/gsd-2/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/gsd-build/gsd-2/compare/v0.2.9...v0.3.0
