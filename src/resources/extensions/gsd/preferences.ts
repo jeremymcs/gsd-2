@@ -107,7 +107,7 @@ export interface SkillResolutionReport {
 
 /**
  * Known skill directories, in priority order.
- * User skills (~/.pi/agent/skills/) take precedence over project skills.
+ * User skills (~/.gsd/agent/skills/) take precedence over project skills.
  */
 function getSkillSearchDirs(cwd: string): Array<{ dir: string; method: SkillResolution["method"] }> {
   return [

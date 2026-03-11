@@ -211,8 +211,8 @@ function sendPrompt(description: string, result: RoundResult, pi: ExtensionAPI):
 ${contextSection}
 Write the complete file contents for two files:
 
-1. \`~/.pi/agent/extensions/slash-commands/<name>.ts\` — the command implementation
-2. Update \`~/.pi/agent/extensions/slash-commands/index.ts\` — import and register the new command alongside existing ones
+1. \`~/.gsd/agent/extensions/slash-commands/<name>.ts\` — the command implementation
+2. Update \`~/.gsd/agent/extensions/slash-commands/index.ts\` — import and register the new command alongside existing ones
 
 Rules you must follow exactly:
 - Command registration: \`pi.registerCommand("name", { description, handler })\`

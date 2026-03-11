@@ -12,4 +12,4 @@ auto_supervisor: {}
 
 # GSD Skill Preferences
 
-See `~/.pi/agent/extensions/gsd/docs/preferences-reference.md` for full field documentation and examples.
+See `~/.gsd/agent/extensions/gsd/docs/preferences-reference.md` for full field documentation and examples.

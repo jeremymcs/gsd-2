@@ -132,7 +132,7 @@ auto_supervisor: {}
 
 Project-specific guidance for skill selection and execution preferences.
 
-See \`~/.pi/agent/extensions/gsd/docs/preferences-reference.md\` for full field documentation and examples.
+See \`~/.gsd/agent/extensions/gsd/docs/preferences-reference.md\` for full field documentation and examples.
 
 ## Fields
 

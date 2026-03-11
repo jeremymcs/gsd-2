@@ -418,7 +418,7 @@ export default function (pi: ExtensionAPI) {
 		handler: async (_args, ctx) => {
 			const discovery = discoverAgents(ctx.cwd, "both");
 			if (discovery.agents.length === 0) {
-				ctx.ui.notify("No agents found. Add .md files to ~/.pi/agent/agents/ or .pi/agents/", "warning");
+				ctx.ui.notify("No agents found. Add .md files to ~/.gsd/agent/agents/ or .gsd/agents/", "warning");
 				return;
 			}
 			const lines = discovery.agents.map(
@@ -435,7 +435,7 @@ export default function (pi: ExtensionAPI) {
 			"Delegate tasks to specialized subagents with isolated context windows.",
 			"Each subagent is a separate pi process with its own tools, model, and system prompt.",
 			"Modes: single ({ agent, task }), parallel ({ tasks: [{agent, task},...] }), chain ({ chain: [{agent, task},...] } with {previous} placeholder).",
-			"Agents are defined as .md files in ~/.pi/agent/agents/ (user) or .pi/agents/ (project).",
+			"Agents are defined as .md files in ~/.gsd/agent/agents/ (user) or .gsd/agents/ (project).",
 			"Use the /subagent command to list available agents and their descriptions.",
 			"Use chain mode to pipeline: scout finds context, planner designs, worker implements.",
 		].join(" "),

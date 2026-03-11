@@ -221,41 +221,41 @@ function sendPrompt(description: string, result: RoundResult, pi: ExtensionAPI):
 		: "";
 
 	const docHints: string[] = [
-		"- `~/.pi/agent/docs/extending-pi/01-what-are-extensions.md` — capabilities overview",
-		"- `~/.pi/agent/docs/extending-pi/03-getting-started.md` — minimal extension, hot reload",
-		"- `~/.pi/agent/docs/extending-pi/08-extensioncontext-what-you-can-access.md` — ExtensionContext API",
-		"- `~/.pi/agent/docs/extending-pi/09-extensionapi-what-you-can-do.md` — ExtensionAPI: registration, messaging",
-		"- `~/.pi/agent/docs/extending-pi/22-key-rules-gotchas.md` — must-read rules before shipping",
+		"- `~/.gsd/agent/docs/extending-pi/01-what-are-extensions.md` — capabilities overview",
+		"- `~/.gsd/agent/docs/extending-pi/03-getting-started.md` — minimal extension, hot reload",
+		"- `~/.gsd/agent/docs/extending-pi/08-extensioncontext-what-you-can-access.md` — ExtensionContext API",
+		"- `~/.gsd/agent/docs/extending-pi/09-extensionapi-what-you-can-do.md` — ExtensionAPI: registration, messaging",
+		"- `~/.gsd/agent/docs/extending-pi/22-key-rules-gotchas.md` — must-read rules before shipping",
 	];
 
 	if (uiSelected.includes("custom component")) {
-		docHints.push("- `~/.pi/agent/docs/extending-pi/12-custom-ui-visual-components.md` — dialogs, widgets, overlays");
-		docHints.push("- `~/.pi/agent/docs/pi-ui-tui/06-ctx-ui-custom-full-custom-components.md` — ctx.ui.custom() API");
-		docHints.push("- `~/.pi/agent/docs/pi-ui-tui/07-built-in-components-the-building-blocks.md` — Text, Box, SelectList");
-		docHints.push("- `~/.pi/agent/docs/pi-ui-tui/09-keyboard-input-how-to-handle-keys.md` — Key, matchesKey");
-		docHints.push("- `~/.pi/agent/docs/pi-ui-tui/10-line-width-the-cardinal-rule.md` — truncation, width rules");
-		docHints.push("- `~/.pi/agent/docs/pi-ui-tui/19-building-a-complete-component-step-by-step.md` — step-by-step guide");
-		docHints.push("- `~/.pi/agent/docs/pi-ui-tui/21-common-mistakes-and-how-to-avoid-them.md` — pitfalls");
+		docHints.push("- `~/.gsd/agent/docs/extending-pi/12-custom-ui-visual-components.md` — dialogs, widgets, overlays");
+		docHints.push("- `~/.gsd/agent/docs/pi-ui-tui/06-ctx-ui-custom-full-custom-components.md` — ctx.ui.custom() API");
+		docHints.push("- `~/.gsd/agent/docs/pi-ui-tui/07-built-in-components-the-building-blocks.md` — Text, Box, SelectList");
+		docHints.push("- `~/.gsd/agent/docs/pi-ui-tui/09-keyboard-input-how-to-handle-keys.md` — Key, matchesKey");
+		docHints.push("- `~/.gsd/agent/docs/pi-ui-tui/10-line-width-the-cardinal-rule.md` — truncation, width rules");
+		docHints.push("- `~/.gsd/agent/docs/pi-ui-tui/19-building-a-complete-component-step-by-step.md` — step-by-step guide");
+		docHints.push("- `~/.gsd/agent/docs/pi-ui-tui/21-common-mistakes-and-how-to-avoid-them.md` — pitfalls");
 	} else if (uiSelected.includes("Dialogs")) {
-		docHints.push("- `~/.pi/agent/docs/pi-ui-tui/04-built-in-dialog-methods.md` — select, confirm, input, editor");
+		docHints.push("- `~/.gsd/agent/docs/pi-ui-tui/04-built-in-dialog-methods.md` — select, confirm, input, editor");
 	} else if (uiSelected.includes("Status")) {
-		docHints.push("- `~/.pi/agent/docs/pi-ui-tui/05-persistent-ui-elements.md` — status, widgets, footer, header");
+		docHints.push("- `~/.gsd/agent/docs/pi-ui-tui/05-persistent-ui-elements.md` — status, widgets, footer, header");
 	}
 
 	if (uiSelected.includes("tool") || result.answers["purpose"]) {
-		docHints.push("- `~/.pi/agent/docs/extending-pi/14-custom-rendering-controlling-what-the-user-sees.md` — renderCall / renderResult");
+		docHints.push("- `~/.gsd/agent/docs/extending-pi/14-custom-rendering-controlling-what-the-user-sees.md` — renderCall / renderResult");
 	}
 
 	if (eventsSelected && !eventsSelected.includes("standalone")) {
-		docHints.push("- `~/.pi/agent/docs/extending-pi/07-events-the-nervous-system.md` — all events reference");
+		docHints.push("- `~/.gsd/agent/docs/extending-pi/07-events-the-nervous-system.md` — all events reference");
 	}
 
 	if (eventsSelected.includes("context / prompt")) {
-		docHints.push("- `~/.pi/agent/docs/extending-pi/15-system-prompt-modification.md` — system prompt hooks");
+		docHints.push("- `~/.gsd/agent/docs/extending-pi/15-system-prompt-modification.md` — system prompt hooks");
 	}
 
 	if (persistenceSelected.includes("session")) {
-		docHints.push("- `~/.pi/agent/docs/extending-pi/13-state-management-persistence.md` — pi.appendEntry, session state");
+		docHints.push("- `~/.gsd/agent/docs/extending-pi/13-state-management-persistence.md` — pi.appendEntry, session state");
 	}
 
 	const prompt = `Create a new pi extension based on this description:
@@ -272,11 +272,11 @@ ${docHints.join("\n")}
 
 Write the complete implementation as a single self-contained extension file:
 
-\`~/.pi/agent/extensions/<kebab-case-name>.ts\`
+\`~/.gsd/agent/extensions/<kebab-case-name>.ts\`
 
 Then register it in the main extensions index:
 
-\`~/.pi/agent/extensions/index.ts\` — import and call the new extension's default export alongside existing ones
+\`~/.gsd/agent/extensions/index.ts\` — import and call the new extension's default export alongside existing ones
 
 ## Rules you must follow exactly
 
