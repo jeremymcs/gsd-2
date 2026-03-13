@@ -526,14 +526,15 @@ export async function handleAgentEnd(
     }
 
     // Post-hook: fix mechanical bookkeeping the LLM may have skipped.
-    // 1. Doctor handles: checkbox marking, stub summaries/UATs.
+    // 1. Doctor handles: checkbox marking (task-level bookkeeping).
     // 2. STATE.md is always rebuilt from disk state (purely derived, no LLM needed).
-    // This is more reliable than prompt instructions for mechanical tasks.
-    // Scope to slice level (M001/S01) so doctor checks all tasks within the slice.
+    // fixLevel:"task" ensures doctor only fixes task-level issues (e.g. marking
+    // checkboxes). Slice/milestone completion transitions (summary stubs,
+    // roadmap [x] marking) are left for the complete-slice dispatch unit.
     try {
       const scopeParts = currentUnit.id.split("/").slice(0, 2);
       const doctorScope = scopeParts.join("/");
-      const report = await runGSDDoctor(basePath, { fix: true, scope: doctorScope });
+      const report = await runGSDDoctor(basePath, { fix: true, scope: doctorScope, fixLevel: "task" });
       if (report.fixesApplied.length > 0) {
         ctx.ui.notify(`Post-hook: applied ${report.fixesApplied.length} fix(es).`, "info");
       }
