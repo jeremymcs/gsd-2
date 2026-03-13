@@ -135,4 +135,5 @@ export const native = loadNative() as {
   parseJson: (text: string) => unknown;
   parsePartialJson: (text: string) => unknown;
   parseStreamingJson: (text: string) => unknown;
+  xxHash32: (input: string, seed: number) => number;
 };

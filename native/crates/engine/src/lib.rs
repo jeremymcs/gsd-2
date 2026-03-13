@@ -25,3 +25,4 @@ mod gsd_parser;
 mod image;
 mod json_parse;
 mod stream_process;
+mod xxhash;
