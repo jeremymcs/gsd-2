@@ -15,7 +15,7 @@ import { Type } from "@sinclair/typebox";
 
 import { LRUTTLCache } from "./cache.js";
 import { fetchSimple, HttpError } from "./http.js";
-import { extractDomain } from "./url-utils.js";
+import { extractDomain, isBlockedUrl } from "./url-utils.js";
 import { formatPageContent, type FormatPageOptions } from "./format.js";
 import { getOllamaApiKey } from "./provider.js";
 
@@ -413,6 +413,14 @@ export function registerFetchPageTool(pi: ExtensionAPI) {
           content: [{ type: "text", text: `Invalid URL: ${url}` }],
           isError: true,
           details: { error: "Invalid URL", url } satisfies Partial<FetchPageDetails>,
+        };
+      }
+
+      if (isBlockedUrl(url)) {
+        return {
+          content: [{ type: "text", text: `Blocked URL: requests to private/internal addresses are not allowed.` }],
+          isError: true,
+          details: { error: "SSRF blocked", url } satisfies Partial<FetchPageDetails>,
         };
       }
 

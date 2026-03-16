@@ -27,6 +27,8 @@ import * as _bundledPiCodingAgent from "../../index.js";
 import { createEventBus, type EventBus } from "../event-bus.js";
 import type { ExecOptions } from "../exec.js";
 import { execCommand } from "../exec.js";
+import { getUntrustedExtensionPaths } from "./project-trust.js";
+export { isProjectTrusted, trustProject, getUntrustedExtensionPaths } from "./project-trust.js";
 import type {
 	Extension,
 	ExtensionAPI,
@@ -538,8 +540,19 @@ export async function discoverAndLoadExtensions(
 	};
 
 	// 1. Project-local extensions: cwd/.pi/extensions/
+	// Only loaded when the project path has been explicitly trusted (TOFU model).
 	const localExtDir = path.join(cwd, ".pi", "extensions");
-	addPaths(discoverExtensionsInDir(localExtDir));
+	const localDiscovered = discoverExtensionsInDir(localExtDir);
+	if (localDiscovered.length > 0) {
+		const untrusted = getUntrustedExtensionPaths(cwd, localDiscovered, agentDir);
+		if (untrusted.length > 0) {
+			process.stderr.write(
+				`[pi] Skipping ${untrusted.length} project-local extension(s) in ${localExtDir} — project not trusted. Use trustProject() to enable.\n`,
+			);
+		}
+		const trusted = localDiscovered.filter((p) => !untrusted.includes(p));
+		addPaths(trusted);
+	}
 
 	// 2. Global extensions: agentDir/extensions/
 	const globalExtDir = path.join(agentDir, "extensions");

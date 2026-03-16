@@ -19,6 +19,7 @@ import { getPiDefaultModelAndProvider, migratePiCredentials } from './pi-migrati
 import { shouldRunOnboarding, runOnboarding } from './onboarding.js'
 import chalk from 'chalk'
 import { checkForUpdates } from './update-check.js'
+import { printHelp } from './help-text.js'
 
 // ---------------------------------------------------------------------------
 // Minimal CLI arg parser — detects print/subagent mode flags
@@ -79,22 +80,7 @@ function parseCliArgs(argv: string[]): CliFlags {
       process.stdout.write((process.env.GSD_VERSION || '0.0.0') + '\n')
       process.exit(0)
     } else if (arg === '--help' || arg === '-h') {
-      process.stdout.write(`GSD v${process.env.GSD_VERSION || '0.0.0'} — Get Shit Done\n\n`)
-      process.stdout.write('Usage: gsd [options] [message...]\n\n')
-      process.stdout.write('Options:\n')
-      process.stdout.write('  --mode <text|json|rpc>   Output mode (default: interactive)\n')
-      process.stdout.write('  --print, -p              Single-shot print mode\n')
-      process.stdout.write('  --continue, -c           Resume the most recent session\n')
-      process.stdout.write('  --model <id>             Override model (e.g. claude-opus-4-6)\n')
-      process.stdout.write('  --no-session             Disable session persistence\n')
-      process.stdout.write('  --extension <path>       Load additional extension\n')
-      process.stdout.write('  --tools <a,b,c>          Restrict available tools\n')
-      process.stdout.write('  --list-models [search]   List available models and exit\n')
-      process.stdout.write('  --version, -v            Print version and exit\n')
-      process.stdout.write('  --help, -h               Print this help and exit\n')
-      process.stdout.write('\nSubcommands:\n')
-      process.stdout.write('  config                   Re-run the setup wizard\n')
-      process.stdout.write('  update                   Update GSD to the latest version\n')
+      printHelp(process.env.GSD_VERSION || '0.0.0')
       process.exit(0)
     } else if (!arg.startsWith('--') && !arg.startsWith('-')) {
       flags.messages.push(arg)
