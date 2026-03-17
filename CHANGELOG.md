@@ -6,16 +6,34 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.23.0] - 2026-03-16
+
 ### Added
-- **`gsd sessions`** — interactive session picker: lists all saved sessions for the current directory with date, message count, and first-message preview; lets you pick one to resume. Compare with `--continue` which always resumes the most recent session. (#721)
-- **10 new browser tools** — shipped from the #698 feature additions: `browser_save_pdf`, `browser_save_state`, `browser_restore_state`, `browser_mock_route`, `browser_block_urls`, `browser_clear_routes`, `browser_emulate_device`, `browser_extract`, `browser_visual_diff`, `browser_zoom_region`, `browser_generate_test`, `browser_check_injection`, `browser_action_cache` (#698)
+- **VS Code extension** — full extension with chat participant, RPC integration, marketplace publishing under FluxLabs publisher
+- **`gsd headless`** — redesigned headless mode for full workflow orchestration: auto-responds to prompts, detects completion, supports `--json` output and `--timeout` flags
+- **`gsd sessions`** — interactive session picker for browsing and resuming saved sessions (#721)
+- **10 new browser tools** — `browser_save_pdf`, `browser_save_state`, `browser_restore_state`, `browser_mock_route`, `browser_block_urls`, `browser_clear_routes`, `browser_emulate_device`, `browser_extract`, `browser_visual_diff`, `browser_zoom_region`, `browser_generate_test`, `browser_check_injection`, `browser_action_cache` (#698)
+- **Structured discussion rounds** — `ask_user_questions` in guided-discuss-milestone for better requirement gathering (#688)
+- **`validate-milestone` prompt** — milestone validation prompt and template
+- **`models.json` resolution** — custom model definitions with fallback to `~/.pi/agent/models.json`
+
+### Changed
+- **Background shell performance** — optimized hot path with parallel git queries and lazy workspace validation
 
 ### Fixed
-- Shift-Tab now navigates to previous tab in the workflow visualizer (#717)
-- Capture resolutions are now executed after triage instead of only being classified (#714)
-- Screenshot constraining uses independent width/height caps to prevent squishing (#725)
-- `auto.lock` is written at process startup; remote sessions are now detected in the dashboard (#723)
-- Cross-platform test compatibility: use `process.ppid` instead of PID 1
+- Forensics uses `GSD_VERSION` env var instead of fragile package.json path traversal; now worktree-aware to prevent stale root misdiagnosis
+- Background commands rewritten to prevent pipe-open hang; stalled-tool detection added with prompt guidance
+- Auto mode breaks infinite skip loop on repeatedly-skipped completed units
+- Roadmap parser expands range syntax in depends (e.g. `S01-S04` → `S01,S02,S03,S04`)
+- Empty scaffold plan files rejected during plan-slice artifact verification (#699)
+- Anti-pattern rule prevents `bash &` usage that causes agent hangs (#733)
+- Shift-Tab navigates to previous tab in workflow visualizer (#717)
+- Capture resolutions executed after triage instead of only classified (#714)
+- Screenshot constraining uses independent width/height caps (#725)
+- `auto.lock` written at startup; remote sessions detected in dashboard (#723)
+- Cross-platform test compatibility with `process.ppid`
+- CSP nonce, dead branch cleanup, restart cooldown fixes
+- CI fix: `pi.getActiveTools()` replaces `ctx.getActiveTools()`
 
 ## [2.22.0] - 2026-03-16
 
@@ -872,7 +890,8 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### Changed
 - License updated to MIT
 
-[Unreleased]: https://github.com/gsd-build/gsd-2/compare/v2.22.0...HEAD
+[Unreleased]: https://github.com/gsd-build/gsd-2/compare/v2.23.0...HEAD
+[2.23.0]: https://github.com/gsd-build/gsd-2/compare/v2.22.0...v2.23.0
 [2.21.0]: https://github.com/gsd-build/gsd-2/compare/v2.20.0...v2.21.0
 [2.19.0]: https://github.com/gsd-build/gsd-2/compare/v2.18.0...v2.19.0
 [2.18.0]: https://github.com/gsd-build/gsd-2/compare/v2.17.0...v2.18.0
