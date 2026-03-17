@@ -40,6 +40,7 @@ Format based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Unique temp paths in saveFile() to prevent parallel write collisions
 - Validation/summary file generation for completed milestones during migration
 - Cache invalidation before initial state derivation in startAuto
+- Headless mode no longer exits early on progress notifications containing 'complete'
 
 ### Removed
 - Symlink-based development workflow (reverted PR #744)
