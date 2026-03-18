@@ -138,14 +138,6 @@ export function clearPathCache(): void {
 // ─── Name Builders ─────────────────────────────────────────────────────────
 
 /**
- * Build a directory name from an ID.
- * ("M001") → "M001"
- */
-export function buildDirName(id: string): string {
-  return id;
-}
-
-/**
  * Build a milestone-level file name.
  * ("M001", "CONTEXT") → "M001-CONTEXT.md"
  */
