@@ -23,30 +23,24 @@ import type {
   ExtensionCommandContext,
   ExtensionContext,
 } from "@gsd/pi-coding-agent";
-import { createBashTool, createWriteTool, createReadTool, createEditTool, isToolCallEventType } from "@gsd/pi-coding-agent";
+import {
+  createBashTool,
+  createEditTool,
+  createReadTool,
+  createWriteTool,
+  importExtensionModule,
+  isToolCallEventType,
+} from "@gsd/pi-coding-agent";
 import { Type } from "@sinclair/typebox";
 
 import { debugLog, debugTime } from "./debug-logger.js";
-import { registerGSDCommand } from "./commands.js";
+import { registerLazyGSDCommand } from "./commands-bootstrap.js";
 import { loadToolApiKeys } from "./commands-config.js";
 import { registerExitCommand } from "./exit-command.js";
-import { registerWorktreeCommand, getWorktreeOriginalCwd, getActiveWorktreeName } from "./worktree-command.js";
-import { getActiveAutoWorktreeContext } from "./auto-worktree.js";
+import { registerLazyWorktreeCommands } from "./worktree-command-bootstrap.js";
 import { saveFile, formatContinue, loadFile, parseContinue, parseSummary, loadActiveOverrides, formatOverridesSection } from "./files.js";
 import { loadPrompt } from "./prompt-loader.js";
-import { deriveState } from "./state.js";
-import { isAutoActive, isAutoPaused, handleAgentEnd, pauseAuto, getAutoDashboardData, getAutoModeStartModel, markToolStart, markToolEnd } from "./auto.js";
 import { saveActivityLog } from "./activity-log.js";
-import { checkAutoStartAfterDiscuss, getDiscussionMilestoneId, findMilestoneIds, nextMilestoneId } from "./guided-flow.js";
-import { GSDDashboardOverlay } from "./dashboard-overlay.js";
-import {
-  loadEffectiveGSDPreferences,
-  renderPreferencesForSystemPrompt,
-  resolveAllSkillReferences,
-  resolveModelWithFallbacksForUnit,
-  getNextFallbackModel,
-  isTransientNetworkError,
-} from "./preferences.js";
 import { hasSkillSnapshot, detectNewSkills, formatSkillsXml } from "./skill-discovery.js";
 import {
   resolveSlicePath, resolveSliceFile, resolveTaskFile, resolveTaskFiles, resolveTasksDir,
@@ -60,11 +54,29 @@ import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { shortcutDesc } from "../shared/mod.js";
 import { Text } from "@gsd/pi-tui";
-import { pauseAutoForProviderError, classifyProviderError } from "./provider-error-pause.js";
 import { toPosixPath } from "../shared/mod.js";
-import { isParallelActive, shutdownParallel } from "./parallel-orchestrator.js";
 import { DEFAULT_BASH_TIMEOUT_SECS } from "./constants.js";
 import { getErrorMessage } from "./error-utils.js";
+
+function memoizeImport<T>(loader: () => Promise<T>): () => Promise<T> {
+  let promise: Promise<T> | null = null;
+  return () => {
+    if (!promise) {
+      promise = loader();
+    }
+    return promise;
+  };
+}
+
+const loadAutoModule = memoizeImport(() => importExtensionModule<typeof import("./auto.js")>(import.meta.url, "./auto.js"));
+const loadStateModule = memoizeImport(() => importExtensionModule<typeof import("./state.js")>(import.meta.url, "./state.js"));
+const loadGuidedFlowModule = memoizeImport(() => importExtensionModule<typeof import("./guided-flow.js")>(import.meta.url, "./guided-flow.js"));
+const loadPreferencesModule = memoizeImport(() => importExtensionModule<typeof import("./preferences.js")>(import.meta.url, "./preferences.js"));
+const loadDashboardOverlayModule = memoizeImport(() => importExtensionModule<typeof import("./dashboard-overlay.js")>(import.meta.url, "./dashboard-overlay.js"));
+const loadWorktreeCommandModule = memoizeImport(() => importExtensionModule<typeof import("./worktree-command.js")>(import.meta.url, "./worktree-command.js"));
+const loadAutoWorktreeModule = memoizeImport(() => importExtensionModule<typeof import("./auto-worktree.js")>(import.meta.url, "./auto-worktree.js"));
+const loadProviderErrorPauseModule = memoizeImport(() => importExtensionModule<typeof import("./provider-error-pause.js")>(import.meta.url, "./provider-error-pause.js"));
+const loadParallelOrchestratorModule = memoizeImport(() => importExtensionModule<typeof import("./parallel-orchestrator.js")>(import.meta.url, "./parallel-orchestrator.js"));
 
 /**
  * Ensure the GSD database is available, auto-initializing if needed.
@@ -72,7 +84,7 @@ import { getErrorMessage } from "./error-utils.js";
  */
 async function ensureDbAvailable(): Promise<boolean> {
   try {
-    const db = await import("./gsd-db.js");
+    const db = await importExtensionModule<typeof import("./gsd-db.js")>(import.meta.url, "./gsd-db.js");
     if (db.isDbAvailable()) return true;
 
     // Auto-initialize: open (and create if needed) the DB at the standard path
@@ -212,8 +224,8 @@ const GSD_LOGO_LINES = [
 ];
 
 export default function (pi: ExtensionAPI) {
-  registerGSDCommand(pi);
-  registerWorktreeCommand(pi);
+  registerLazyGSDCommand(pi);
+  registerLazyWorktreeCommands(pi);
   registerExitCommand(pi);
 
   // ── EPIPE guard — prevent crash when stdout/stderr pipe closes unexpectedly ──
@@ -369,7 +381,7 @@ export default function (pi: ExtensionAPI) {
       }
 
       try {
-        const { saveDecisionToDb } = await import("./db-writer.js");
+        const { saveDecisionToDb } = await importExtensionModule<typeof import("./db-writer.js")>(import.meta.url, "./db-writer.js");
         const { id } = await saveDecisionToDb(
           {
             scope: params.scope,
@@ -431,7 +443,7 @@ export default function (pi: ExtensionAPI) {
 
       try {
         // Verify requirement exists
-        const db = await import("./gsd-db.js");
+        const db = await importExtensionModule<typeof import("./gsd-db.js")>(import.meta.url, "./gsd-db.js");
         const existing = db.getRequirementById(params.id);
         if (!existing) {
           return {
@@ -441,7 +453,7 @@ export default function (pi: ExtensionAPI) {
           };
         }
 
-        const { updateRequirementInDb } = await import("./db-writer.js");
+        const { updateRequirementInDb } = await importExtensionModule<typeof import("./db-writer.js")>(import.meta.url, "./db-writer.js");
         const updates: Record<string, string | undefined> = {};
         if (params.status !== undefined) updates.status = params.status;
         if (params.validation !== undefined) updates.validation = params.validation;
@@ -519,7 +531,7 @@ export default function (pi: ExtensionAPI) {
           relativePath = `milestones/${params.milestone_id}/${params.milestone_id}-${params.artifact_type}.md`;
         }
 
-        const { saveArtifactToDb } = await import("./db-writer.js");
+        const { saveArtifactToDb } = await importExtensionModule<typeof import("./db-writer.js")>(import.meta.url, "./db-writer.js");
         await saveArtifactToDb(
           {
             path: relativePath,
@@ -574,6 +586,10 @@ export default function (pi: ExtensionAPI) {
     parameters: Type.Object({}),
     async execute(_toolCallId, _params, _signal, _onUpdate, _ctx) {
       try {
+        const [{ findMilestoneIds, nextMilestoneId }, { loadEffectiveGSDPreferences }] = await Promise.all([
+          loadGuidedFlowModule(),
+          loadPreferencesModule(),
+        ]);
         const basePath = process.cwd();
         const existingIds = findMilestoneIds(basePath);
         const uniqueEnabled = !!loadEffectiveGSDPreferences()?.preferences?.unique_milestone_ids;
@@ -621,15 +637,15 @@ export default function (pi: ExtensionAPI) {
 
     // Always-on health widget — ambient system health signal below the editor
     try {
-      const { initHealthWidget } = await import("./health-widget.js");
+      const { initHealthWidget } = await importExtensionModule<typeof import("./health-widget.js")>(import.meta.url, "./health-widget.js");
       initHealthWidget(ctx);
     } catch { /* non-fatal — widget is best-effort */ }
 
     // Notify remote questions status if configured
     try {
       const [{ getRemoteConfigStatus }, { getLatestPromptSummary }] = await Promise.all([
-        import("../remote-questions/config.js"),
-        import("../remote-questions/status.js"),
+        importExtensionModule<typeof import("../remote-questions/config.js")>(import.meta.url, "../remote-questions/config.js"),
+        importExtensionModule<typeof import("../remote-questions/status.js")>(import.meta.url, "../remote-questions/status.js"),
       ]);
       const status = getRemoteConfigStatus();
       const latest = getLatestPromptSummary();
@@ -652,6 +668,7 @@ export default function (pi: ExtensionAPI) {
         return;
       }
 
+      const { GSDDashboardOverlay } = await loadDashboardOverlayModule();
       const result = await ctx.ui.custom<void>(
         (tui, theme, _kb, done) => {
           return new GSDDashboardOverlay(tui, theme, () => done());
@@ -669,7 +686,7 @@ export default function (pi: ExtensionAPI) {
 
       // Fallback for RPC mode where ctx.ui.custom() returns undefined.
       if (result === undefined) {
-        const { fireStatusViaCommand } = await import("./commands.js");
+        const { fireStatusViaCommand } = await importExtensionModule<typeof import("./commands.js")>(import.meta.url, "./commands.js");
         await fireStatusViaCommand(ctx);
       }
     },
@@ -681,6 +698,8 @@ export default function (pi: ExtensionAPI) {
 
     const stopContextTimer = debugTime("context-inject");
     const systemContent = loadPrompt("system");
+    const { loadEffectiveGSDPreferences, resolveAllSkillReferences, renderPreferencesForSystemPrompt } =
+      await loadPreferencesModule();
     const loadedPreferences = loadEffectiveGSDPreferences();
     let preferenceBlock = "";
     if (loadedPreferences) {
@@ -714,7 +733,7 @@ export default function (pi: ExtensionAPI) {
     // Inject auto-learned project memories
     let memoryBlock = "";
     try {
-      const { getActiveMemoriesRanked, formatMemoriesForPrompt } = await import("./memory-store.js");
+      const { getActiveMemoriesRanked, formatMemoriesForPrompt } = await importExtensionModule<typeof import("./memory-store.js")>(import.meta.url, "./memory-store.js");
       const memories = getActiveMemoriesRanked(30);
       if (memories.length > 0) {
         const formatted = formatMemoriesForPrompt(memories, 2000);
@@ -744,6 +763,10 @@ export default function (pi: ExtensionAPI) {
 
     // Worktree context — override the static CWD in the system prompt
     let worktreeBlock = "";
+    const [{ getActiveWorktreeName, getWorktreeOriginalCwd }, { getActiveAutoWorktreeContext }] = await Promise.all([
+      loadWorktreeCommandModule(),
+      loadAutoWorktreeModule(),
+    ]);
     const worktreeName = getActiveWorktreeName();
     const worktreeMainCwd = getWorktreeOriginalCwd();
     const autoWorktree = getActiveAutoWorktreeContext();
@@ -807,9 +830,31 @@ export default function (pi: ExtensionAPI) {
 
   // ── agent_end: auto-mode advancement or auto-start after discuss ───────────
   pi.on("agent_end", async (event, ctx: ExtensionContext) => {
+    const [
+      {
+        isAutoActive,
+        pauseAuto,
+        getAutoDashboardData,
+        getAutoModeStartModel,
+        handleAgentEnd,
+      },
+      { checkAutoStartAfterDiscuss },
+      {
+        isTransientNetworkError,
+        resolveModelWithFallbacksForUnit,
+        getNextFallbackModel,
+      },
+      { classifyProviderError, pauseAutoForProviderError },
+    ] = await Promise.all([
+      loadAutoModule(),
+      loadGuidedFlowModule(),
+      loadPreferencesModule(),
+      loadProviderErrorPauseModule(),
+    ]);
+
     // Clean up quick-task branch if one just completed (#1269)
     try {
-      const { cleanupQuickBranch } = await import("./quick.js");
+      const { cleanupQuickBranch } = await importExtensionModule<typeof import("./quick.js")>(import.meta.url, "./quick.js");
       cleanupQuickBranch();
     } catch { /* non-fatal */ }
 
@@ -1020,6 +1065,11 @@ export default function (pi: ExtensionAPI) {
 
   // ── session_before_compact ────────────────────────────────────────────────
   pi.on("session_before_compact", async (_event, _ctx: ExtensionContext) => {
+    const [{ isAutoActive, isAutoPaused }, { deriveState }] = await Promise.all([
+      loadAutoModule(),
+      loadStateModule(),
+    ]);
+
     // Block compaction during auto-mode — each unit is a fresh session
     // Also block during paused state — context is valuable for the user
     if (isAutoActive() || isAutoPaused()) {
@@ -1066,6 +1116,12 @@ export default function (pi: ExtensionAPI) {
 
   // ── session_shutdown: save activity log on Ctrl+C / SIGTERM ─────────────
   pi.on("session_shutdown", async (_event, ctx: ExtensionContext) => {
+    const [{ isParallelActive, shutdownParallel }, { isAutoActive, isAutoPaused, getAutoDashboardData }] =
+      await Promise.all([
+        loadParallelOrchestratorModule(),
+        loadAutoModule(),
+      ]);
+
     if (isParallelActive()) {
       try {
         await shutdownParallel(process.cwd());
@@ -1077,7 +1133,7 @@ export default function (pi: ExtensionAPI) {
     const cliWorktree = process.env.GSD_CLI_WORKTREE;
     if (cliWorktree) {
       try {
-        const { autoCommitCurrentBranch } = await import("./worktree.js");
+        const { autoCommitCurrentBranch } = await importExtensionModule<typeof import("./worktree.js")>(import.meta.url, "./worktree.js");
         const msg = autoCommitCurrentBranch(process.cwd(), "session-end", cliWorktree);
         if (msg) {
           ctx.ui.notify(`Auto-committed worktree ${cliWorktree} before exit.`, "info");
@@ -1102,6 +1158,7 @@ export default function (pi: ExtensionAPI) {
   // CONTEXT.md can be written.
   pi.on("tool_call", async (event) => {
     if (!isToolCallEventType("write", event)) return;
+    const { getDiscussionMilestoneId } = await loadGuidedFlowModule();
     const result = shouldBlockContextWrite(
       event.toolName,
       event.input.path,
@@ -1119,6 +1176,7 @@ export default function (pi: ExtensionAPI) {
   pi.on("tool_result", async (event) => {
     if (event.toolName !== "ask_user_questions") return;
 
+    const { getDiscussionMilestoneId } = await loadGuidedFlowModule();
     const milestoneId = getDiscussionMilestoneId();
     // Queue flows don't set pendingAutoStart, so milestoneId may be null.
     // Depth gate detection still applies — it sets per-milestone flags.
@@ -1194,11 +1252,13 @@ export default function (pi: ExtensionAPI) {
 
   // ── tool_execution_start/end: track in-flight tools for idle detection ──
   pi.on("tool_execution_start", async (event) => {
+    const { isAutoActive, markToolStart } = await loadAutoModule();
     if (!isAutoActive()) return;
     markToolStart(event.toolCallId);
   });
 
   pi.on("tool_execution_end", async (event) => {
+    const { markToolEnd } = await loadAutoModule();
     markToolEnd(event.toolCallId);
   });
 }
@@ -1213,6 +1273,7 @@ async function buildGuidedExecuteContextInjection(prompt: string, basePath: stri
   const resumeMatch = prompt.match(/Resume interrupted work\.[\s\S]*?slice\s+(S\d+)\s+of milestone\s+(M\d+(?:-[a-z0-9]{6})?)/i);
   if (resumeMatch) {
     const [, sliceId, milestoneId] = resumeMatch;
+    const { deriveState } = await loadStateModule();
     const state = await deriveState(basePath);
     if (
       state.activeMilestone?.id === milestoneId &&
