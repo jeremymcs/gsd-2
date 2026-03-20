@@ -107,6 +107,9 @@ export class AutoSession {
   completedUnits: CompletedUnit[] = [];
   currentMilestoneId: string | null = null;
 
+  // ── Engine ───────────────────────────────────────────────────────────────
+  activeEngineId: string | null = null;
+
   // ── Model state ──────────────────────────────────────────────────────────
   autoModeStartModel: StartModel | null = null;
   originalModelId: string | null = null;
@@ -207,6 +210,7 @@ export class AutoSession {
     this.currentUnitRouting = null;
     this.completedUnits = [];
     this.currentMilestoneId = null;
+    this.activeEngineId = null;
 
     // Model
     this.autoModeStartModel = null;
@@ -245,6 +249,7 @@ export class AutoSession {
       stepMode: this.stepMode,
       basePath: this.basePath,
       currentMilestoneId: this.currentMilestoneId,
+      activeEngineId: this.activeEngineId,
       currentUnit: this.currentUnit,
       completedUnits: this.completedUnits.length,
       unitDispatchCount: Object.fromEntries(this.unitDispatchCount),

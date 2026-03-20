@@ -46,6 +46,7 @@ import { handleCleanupBranches, handleCleanupSnapshots, handleSkip, handleDryRun
 import { handleDoctor, handleSteer, handleCapture, handleTriage, handleKnowledge, handleRunHook, handleUpdate, handleSkillHealth } from "./commands-handlers.js";
 import { computeProgressScore, formatProgressLine } from "./progress-score.js";
 import { runEnvironmentChecks } from "./doctor-environment.js";
+import { handleWorkflow, getWorkflowCompletions } from "./commands-workflow.js";
 import { handleLogs } from "./commands-logs.js";
 import { handleStart, handleTemplates, getTemplateCompletions } from "./commands-workflow-templates.js";
 import { readSessionLockData, isSessionLockProcessAlive } from "./session-lock.js";
@@ -208,6 +209,7 @@ export function registerGSDCommand(pi: ExtensionAPI): void {
         { cmd: "update", desc: "Update GSD to the latest version" },
         { cmd: "start", desc: "Start a workflow template (bugfix, spike, feature, etc.)" },
         { cmd: "templates", desc: "List available workflow templates" },
+        { cmd: "workflow", desc: "Custom workflow engine (new, run, list, pause, resume, validate)" },
         { cmd: "extensions", desc: "Manage extensions (list, enable, disable, info)" },
       ];
       const parts = prefix.trim().split(/\s+/);
@@ -460,6 +462,10 @@ export function registerGSDCommand(pi: ExtensionAPI): void {
         const namePrefix = parts[2] ?? "";
         return getTemplateCompletions(namePrefix)
           .map((c) => ({ value: `templates ${c.value}`, label: c.label, description: c.description }));
+      }
+
+      if (parts[0] === "workflow") {
+        return getWorkflowCompletions(parts.slice(1).join(" "));
       }
 
       if (parts[0] === "extensions") {
@@ -1043,6 +1049,12 @@ Examples:
 
       if (trimmed === "templates" || trimmed.startsWith("templates ")) {
         await handleTemplates(trimmed.replace(/^templates\s*/, "").trim(), ctx);
+        return;
+      }
+
+      // ─── Custom Workflow Engine ────────────────────────────────────
+      if (trimmed === "workflow" || trimmed.startsWith("workflow ")) {
+        await handleWorkflow(trimmed.replace(/^workflow\s*/, "").trim(), ctx, pi);
         return;
       }
 
