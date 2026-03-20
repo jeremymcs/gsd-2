@@ -269,23 +269,27 @@ test("resume: derives engine ID from most recent incomplete run", () => {
 
 // ─── routing wired ───────────────────────────────────────────────────────
 
-test("routing: workflow command is wired in commands.ts", async () => {
+test("routing: workflow command is wired in command handlers", async () => {
   const { readFileSync } = await import("node:fs");
   const { join } = await import("node:path");
-  const commandsSrc = readFileSync(
-    join(import.meta.dirname, "..", "commands.ts"),
+  const workflowHandlerSrc = readFileSync(
+    join(import.meta.dirname, "..", "commands", "handlers", "workflow.ts"),
     "utf-8",
   );
   assert.ok(
-    commandsSrc.includes('trimmed === "workflow"'),
-    "commands.ts should route 'workflow' command",
+    workflowHandlerSrc.includes('trimmed === "workflow"'),
+    "workflow handler should route 'workflow' command",
   );
   assert.ok(
-    commandsSrc.includes("handleWorkflow"),
-    "commands.ts should import handleWorkflow",
+    workflowHandlerSrc.includes("handleCustomWorkflow"),
+    "workflow handler should import handleCustomWorkflow",
+  );
+  const catalogSrc = readFileSync(
+    join(import.meta.dirname, "..", "commands", "catalog.ts"),
+    "utf-8",
   );
   assert.ok(
-    commandsSrc.includes("getWorkflowCompletions"),
-    "commands.ts should import getWorkflowCompletions",
+    catalogSrc.includes("getWorkflowCompletions"),
+    "catalog should import getWorkflowCompletions",
   );
 });
