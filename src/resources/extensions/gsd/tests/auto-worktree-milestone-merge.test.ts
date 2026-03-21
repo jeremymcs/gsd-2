@@ -328,6 +328,7 @@ async function main(): Promise<void> {
       assertTrue(existsSync(join(repo, "skip-checkout.ts")), "skip-checkout.ts merged to main");
     }
 
+<<<<<<< HEAD
     // ─── Test 7: Repo using `master` as default branch (#1668) ────────
     console.log("\n=== master-branch repo — no META.json, no prefs (#1668) ===");
     {
