@@ -441,7 +441,10 @@ export function detectProjectSignals(basePath: string): ProjectSignals {
     file.endsWith("pom.xml") || file.endsWith("build.gradle") || file.endsWith("build.gradle.kts"),
   );
   const springBootVersionCatalogs = scannedFiles.filter((file) => file.endsWith(".versions.toml"));
-  if (containsSpringBootMarker(basePath, springBootBuildFiles, springBootVersionCatalogs)) {
+  const springBootSettingsFiles = scannedFiles.filter((file) =>
+    file.endsWith("settings.gradle") || file.endsWith("settings.gradle.kts"),
+  );
+  if (containsSpringBootMarker(basePath, springBootBuildFiles, springBootVersionCatalogs, springBootSettingsFiles)) {
     pushUnique(detectedFiles, "dep:spring-boot");
     if (!primaryLanguage) {
       primaryLanguage = "java/kotlin";
@@ -779,7 +782,7 @@ function isPythonRequirementsFile(relativePath: string): boolean {
     basename === "requirements.txt" ||
     basename === "requirements.in" ||
     /^requirements([-.].+)?\.(txt|in)$/i.test(basename) ||
-    /(^|\/)requirements\/[^/]+\.(txt|in)$/i.test(normalized)
+    /(^|\/)requirements\/.+\.(txt|in)$/i.test(normalized)
   );
 }
 
@@ -810,10 +813,11 @@ function containsSpringBootMarker(
   basePath: string,
   buildFiles: string[],
   versionCatalogFiles: string[],
+  settingsFiles: string[],
 ): boolean {
   const usedPluginAliases = new Set<string>();
   const usedLibraryAliases = new Set<string>();
-  const catalogAccessors = new Set(versionCatalogFiles.map(versionCatalogAccessorName).filter(Boolean));
+  const catalogAccessors = resolveVersionCatalogAccessors(basePath, versionCatalogFiles, settingsFiles);
 
   for (const relativePath of buildFiles) {
     try {
@@ -907,6 +911,11 @@ function stripDependencyComments(relativePath: string, content: string): string 
   }
   if (relativePath.endsWith(".versions.toml")) {
     return content.replace(/(^|\s)#.*$/gm, "");
+  }
+  if (relativePath.endsWith("settings.gradle") || relativePath.endsWith("settings.gradle.kts")) {
+    return content
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .replace(/\/\/.*$/gm, "");
   }
   if (relativePath.endsWith("pom.xml")) {
     return content.replace(/<!--[\s\S]*?-->/g, "");
@@ -1053,6 +1062,37 @@ function versionCatalogAccessorName(relativePath: string): string {
   const normalized = relativePath.replaceAll("\\", "/");
   const basename = normalized.slice(normalized.lastIndexOf("/") + 1);
   return basename.replace(/\.versions\.toml$/i, "").toLowerCase();
+}
+
+function resolveVersionCatalogAccessors(
+  basePath: string,
+  versionCatalogFiles: string[],
+  settingsFiles: string[],
+): Set<string> {
+  const accessors = new Set(versionCatalogFiles.map(versionCatalogAccessorName).filter(Boolean));
+  if (versionCatalogFiles.length === 0 || settingsFiles.length === 0) {
+    return accessors;
+  }
+
+  for (const settingsFile of settingsFiles) {
+    try {
+      const raw = readBounded(join(basePath, settingsFile), 64 * 1024);
+      const content = stripDependencyComments(settingsFile, raw);
+      const createRe = /create\(\s*["']([A-Za-z0-9_]+)["']\s*\)\s*\{[\s\S]*?from\(files\(\s*["']([^"']+\.versions\.toml)["']\s*\)\s*\)/g;
+      let match: RegExpExecArray | null;
+      while ((match = createRe.exec(content)) !== null) {
+        const accessor = match[1].toLowerCase();
+        const catalogPath = match[2].replaceAll("\\", "/");
+        if (versionCatalogFiles.some((file) => file.replaceAll("\\", "/").endsWith(catalogPath))) {
+          accessors.add(accessor);
+        }
+      }
+    } catch {
+      // unreadable settings file — ignore
+    }
+  }
+
+  return accessors;
 }
 
 function scanProjectFiles(basePath: string): string[] {
