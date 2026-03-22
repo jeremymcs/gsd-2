@@ -306,7 +306,6 @@ export const SKILL_CATALOG: SkillPack[] = [
     description: "Spring Boot best practices, DI, RESTful APIs, JPA, testing, and security",
     repo: "github/awesome-copilot",
     skills: ["java-springboot"],
-    matchLanguages: ["java", "java/kotlin"],
     matchFiles: ["pom.xml", "build.gradle", "build.gradle.kts"],
   },
   // ── .NET / C# ────────────────────────────────────────────────────────────
@@ -395,12 +394,14 @@ export const SKILL_CATALOG: SkillPack[] = [
     matchLanguages: ["python"],
     matchFiles: ["pyproject.toml", "setup.py", "requirements.txt"],
   },
+  // FastAPI — no brownfield auto-detection (generic Python markers can't
+  // distinguish FastAPI from other frameworks). Available via greenfield
+  // stack selection or manual install: npx skills add wshobson/agents --skill fastapi-templates
   {
     label: "FastAPI",
     description: "Production-ready FastAPI projects with async patterns and error handling",
     repo: "wshobson/agents",
     skills: ["fastapi-templates"],
-    matchFiles: ["pyproject.toml", "setup.py", "requirements.txt"],
   },
   // ── Go ────────────────────────────────────────────────────────────────────
   {
