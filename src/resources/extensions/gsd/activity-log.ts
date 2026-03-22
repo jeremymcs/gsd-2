@@ -8,7 +8,7 @@
  * Diagnostic extraction is handled by session-forensics.ts.
  */
 
-import { writeFileSync, writeSync, mkdirSync, readdirSync, unlinkSync, statSync, openSync, closeSync, constants } from "node:fs";
+import { writeFileSync, writeSync, mkdirSync, readdirSync, unlinkSync, statSync, openSync, closeSync, fsyncSync, constants } from "node:fs";
 import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { GSDError, GSD_IO_ERROR } from "./errors.js";
@@ -127,6 +127,9 @@ export function saveActivityLog(
       for (const entry of entries) {
         writeSync(fd, JSON.stringify(entry) + "\n");
       }
+      // Flush to disk before close — ensures crash recovery forensics
+      // always has a complete JSONL file, not a truncated one.
+      try { fsyncSync(fd); } catch { /* rare filesystem rejection — non-fatal */ }
     } finally {
       closeSync(fd);
     }

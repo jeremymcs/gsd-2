@@ -14,6 +14,19 @@ import { checkGitHealth, checkRuntimeHealth, checkGlobalHealth } from "./doctor-
 import { checkEnvironmentHealth } from "./doctor-environment.js";
 import { runProviderChecks } from "./doctor-providers.js";
 
+/**
+ * Execute a doctor fix safely — if one fix throws, it should not
+ * prevent subsequent fixes from executing. Returns true on success.
+ */
+async function safeFix(fn: () => Promise<void>): Promise<boolean> {
+  try {
+    await fn();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ── Re-exports ─────────────────────────────────────────────────────────────
 // All public types and functions from extracted modules are re-exported here
 // so that existing imports from "./doctor.js" continue to work unchanged.
@@ -475,6 +488,12 @@ export async function readDoctorHistory(basePath: string, lastN = 50): Promise<D
 }
 
 export async function runGSDDoctor(basePath: string, options?: { fix?: boolean; dryRun?: boolean; scope?: string; fixLevel?: "task" | "all"; isolationMode?: "none" | "worktree" | "branch"; includeBuild?: boolean; includeTests?: boolean }): Promise<DoctorReport> {
+  // Always start from a clean slate. The extension process persists module-level
+  // caches (dirEntryCache, _parseCache, _stateCache) across calls. Without this,
+  // a second doctor run in the same session reads stale cached directory listings
+  // and detects the same issues that the first run already fixed on disk (#1885).
+  invalidateAllCaches();
+
   const issues: DoctorIssue[] = [];
   const fixesApplied: string[] = [];
   const fix = options?.fix === true;
@@ -810,8 +829,9 @@ export async function runGSDDoctor(basePath: string, options?: { fix?: boolean; 
           });
           dryRunCanFix("task_done_missing_summary", `uncheck ${task.id} in plan for ${taskUnitId}`);
           if (shouldFix("task_done_missing_summary")) {
-            await markTaskUndoneInPlan(basePath, milestoneId, slice.id, task.id, fixesApplied);
-            taskUncheckedByDoctor = true;
+            if (await safeFix(() => markTaskUndoneInPlan(basePath, milestoneId, slice.id, task.id, fixesApplied))) {
+              taskUncheckedByDoctor = true;
+            }
           }
         }
 
@@ -825,7 +845,7 @@ export async function runGSDDoctor(basePath: string, options?: { fix?: boolean; 
             file: relSliceFile(basePath, milestoneId, slice.id, "PLAN"),
             fixable: true,
           });
-          if (fix) await markTaskDoneInPlan(basePath, milestoneId, slice.id, task.id, fixesApplied);
+          if (fix) await safeFix(() => markTaskDoneInPlan(basePath, milestoneId, slice.id, task.id, fixesApplied));
         }
 
         // Must-have verification
@@ -881,7 +901,7 @@ export async function runGSDDoctor(basePath: string, options?: { fix?: boolean; 
       // this, state.ts skips done slices and the unchecked tasks never run,
       // causing doctor to fire again on every start (infinite loop).
       if (taskUncheckedByDoctor && slice.done) {
-        await markSliceUndoneInRoadmap(basePath, milestoneId, slice.id, fixesApplied);
+        await safeFix(() => markSliceUndoneInRoadmap(basePath, milestoneId, slice.id, fixesApplied));
       }
 
       // Blocker-without-replan detection
@@ -932,7 +952,7 @@ export async function runGSDDoctor(basePath: string, options?: { fix?: boolean; 
           fixable: true,
         });
         dryRunCanFix("all_tasks_done_missing_slice_summary", `create placeholder summary for ${unitId}`);
-        if (shouldFix("all_tasks_done_missing_slice_summary")) await ensureSliceSummaryStub(basePath, milestoneId, slice.id, fixesApplied);
+        if (shouldFix("all_tasks_done_missing_slice_summary")) await safeFix(() => ensureSliceSummaryStub(basePath, milestoneId, slice.id, fixesApplied));
       }
 
       if (allTasksDone && !hasSliceUat) {
@@ -946,7 +966,7 @@ export async function runGSDDoctor(basePath: string, options?: { fix?: boolean; 
           fixable: true,
         });
         dryRunCanFix("all_tasks_done_missing_slice_uat", `create placeholder UAT for ${unitId}`);
-        if (shouldFix("all_tasks_done_missing_slice_uat")) await ensureSliceUatStub(basePath, milestoneId, slice.id, fixesApplied);
+        if (shouldFix("all_tasks_done_missing_slice_uat")) await safeFix(() => ensureSliceUatStub(basePath, milestoneId, slice.id, fixesApplied));
       }
 
       if (allTasksDone && !slice.done) {
@@ -961,7 +981,7 @@ export async function runGSDDoctor(basePath: string, options?: { fix?: boolean; 
         });
         dryRunCanFix("all_tasks_done_roadmap_not_checked", `mark ${slice.id} done in roadmap`);
         if (shouldFix("all_tasks_done_roadmap_not_checked") && (hasSliceSummary || existsSync(join(slicePath, `${slice.id}-SUMMARY.md`)))) {
-          await markSliceDoneInRoadmap(basePath, milestoneId, slice.id, fixesApplied);
+          await safeFix(() => markSliceDoneInRoadmap(basePath, milestoneId, slice.id, fixesApplied));
         }
       }
 
@@ -978,7 +998,7 @@ export async function runGSDDoctor(basePath: string, options?: { fix?: boolean; 
         if (!allTasksDone) {
           dryRunCanFix("slice_checked_missing_summary", `uncheck ${slice.id} in roadmap (tasks incomplete)`);
           if (shouldFix("slice_checked_missing_summary")) {
-            await markSliceUndoneInRoadmap(basePath, milestoneId, slice.id, fixesApplied);
+            await safeFix(() => markSliceUndoneInRoadmap(basePath, milestoneId, slice.id, fixesApplied));
           }
         }
       }
@@ -1024,6 +1044,11 @@ export async function runGSDDoctor(basePath: string, options?: { fix?: boolean; 
   }
 
   if (fix && !dryRun && fixesApplied.length > 0) {
+    // Invalidate before rebuilding STATE.md so deriveState() reads the files
+    // doctor just wrote (stub summaries, checked roadmap boxes, etc.) rather
+    // than the cached pre-fix snapshot. Without this, STATE.md can be written
+    // with data that predates the fixes applied in this same run (#1885).
+    invalidateAllCaches();
     await updateStateFile(basePath, fixesApplied);
   }
 

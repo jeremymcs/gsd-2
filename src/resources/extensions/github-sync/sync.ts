@@ -54,6 +54,24 @@ import {
   formatSummaryComment,
 } from "./templates.js";
 
+// ─── Internal Helpers ────────────────────────────────────────────────────────
+
+/** Log a GitHub sync error without throwing. */
+function logGhError(phase: string, error: string | undefined): void {
+  debugLog("github-sync", { phase, error: error ?? "unknown" });
+}
+
+/**
+ * Detect idempotent "already done" errors from GitHub.
+ * When retrying a previously-failed close/merge, GitHub returns errors like
+ * "already closed" or "not mergeable" (already merged). These are not real
+ * failures — the desired state already exists on GitHub.
+ */
+function isAlreadyDoneError(error: string | undefined): boolean {
+  if (!error) return false;
+  return /already closed|not mergeable|already merged|pull request is closed|issue is closed/i.test(error);
+}
+
 // ─── Entry Point ────────────────────────────────────────────────────────────
 
 /**
@@ -178,9 +196,10 @@ async function syncMilestonePlan(
     return;
   }
 
-  // Add to project if configured
+  // Add to project if configured (best-effort, non-blocking)
   if (config.project) {
-    ghAddToProject(basePath, mapping.repo, config.project, issueResult.data!);
+    const projectResult = ghAddToProject(basePath, mapping.repo, config.project, issueResult.data!);
+    if (!projectResult.ok) logGhError("add-to-project", projectResult.error);
   }
 
   setMilestoneRecord(mapping, mid, {
@@ -262,7 +281,8 @@ async function syncSlicePlan(
         taskIssueNumbers.push({ id: task.id, title: task.title, issueNumber: taskResult.data! });
 
         if (config.project) {
-          ghAddToProject(basePath, mapping.repo, config.project, taskResult.data!);
+          const projResult = ghAddToProject(basePath, mapping.repo, config.project, taskResult.data!);
+          if (!projResult.ok) logGhError("add-task-to-project", projResult.error);
         }
       } else {
         taskIssueNumbers.push({ id: task.id, title: task.title });
@@ -289,34 +309,36 @@ async function syncSlicePlan(
     // Branch might already exist — continue anyway
   }
 
-  // Push the slice branch
+  // Push the slice branch — if push fails, skip PR creation (remote has no branch)
   const pushResult = ghPushBranch(basePath, sliceBranch);
+  let prNumber = 0;
   if (!pushResult.ok) {
-    debugLog("github-sync", { phase: "push-slice-branch", error: pushResult.error });
-  }
+    logGhError("push-slice-branch", pushResult.error);
+    // Cannot create a PR without a remote branch — record with prNumber: 0
+  } else {
+    // Create draft PR
+    const prBody = formatSlicePRBody({
+      id: sid,
+      title: plan.title || sid,
+      goal: plan.goal,
+      mustHaves: plan.mustHaves,
+      demoCriterion: plan.demo,
+      tasks: taskIssueNumbers,
+    });
 
-  // Create draft PR
-  const prBody = formatSlicePRBody({
-    id: sid,
-    title: plan.title || sid,
-    goal: plan.goal,
-    mustHaves: plan.mustHaves,
-    demoCriterion: plan.demo,
-    tasks: taskIssueNumbers,
-  });
+    const prResult = ghCreatePR(basePath, {
+      repo: mapping.repo,
+      base: milestoneBranch,
+      head: sliceBranch,
+      title: `${sid}: ${plan.title || sid}`,
+      body: prBody,
+      draft: true,
+    });
 
-  const prResult = ghCreatePR(basePath, {
-    repo: mapping.repo,
-    base: milestoneBranch,
-    head: sliceBranch,
-    title: `${sid}: ${plan.title || sid}`,
-    body: prBody,
-    draft: true,
-  });
-
-  const prNumber = prResult.ok ? prResult.data! : 0;
-  if (!prResult.ok) {
-    debugLog("github-sync", { phase: "create-slice-pr", error: prResult.error });
+    prNumber = prResult.ok ? prResult.data! : 0;
+    if (!prResult.ok) {
+      logGhError("create-slice-pr", prResult.error);
+    }
   }
 
   setSliceRecord(mapping, mid, sid, {
@@ -358,12 +380,17 @@ async function syncTaskComplete(
         body: summary.whatHappened,
         frontmatter: summary.frontmatter as unknown as Record<string, unknown>,
       });
-      ghAddComment(basePath, mapping.repo, taskRecord.issueNumber, comment);
+      const commentResult = ghAddComment(basePath, mapping.repo, taskRecord.issueNumber, comment);
+      if (!commentResult.ok) logGhError("task-add-comment", commentResult.error);
     }
   }
 
-  // Close the task issue
-  ghCloseIssue(basePath, mapping.repo, taskRecord.issueNumber);
+  // Close the task issue — only update mapping state if it actually succeeded
+  const closeResult = ghCloseIssue(basePath, mapping.repo, taskRecord.issueNumber);
+  if (!closeResult.ok && !isAlreadyDoneError(closeResult.error)) {
+    logGhError("task-close-issue", closeResult.error);
+    return; // Leave state as "open" so next sync retries
+  }
 
   taskRecord.state = "closed";
   taskRecord.lastSyncedAt = new Date().toISOString();
@@ -393,15 +420,22 @@ async function syncSliceComplete(
         body: summary.whatHappened,
         frontmatter: summary.frontmatter as unknown as Record<string, unknown>,
       });
-      ghAddComment(basePath, mapping.repo, sliceRecord.prNumber, comment);
+      const commentResult = ghAddComment(basePath, mapping.repo, sliceRecord.prNumber, comment);
+      if (!commentResult.ok) logGhError("slice-pr-comment", commentResult.error);
     }
   }
 
-  // Mark PR ready for review, then merge
+  // Mark PR ready for review, then merge — guard each result
   if (sliceRecord.prNumber) {
-    ghMarkPRReady(basePath, mapping.repo, sliceRecord.prNumber);
-    // Squash-merge into milestone branch
-    ghMergePR(basePath, mapping.repo, sliceRecord.prNumber, "squash");
+    const readyResult = ghMarkPRReady(basePath, mapping.repo, sliceRecord.prNumber);
+    if (!readyResult.ok) logGhError("slice-pr-ready", readyResult.error);
+
+    // Squash-merge into milestone branch — only update state if merge succeeds
+    const mergeResult = ghMergePR(basePath, mapping.repo, sliceRecord.prNumber, "squash");
+    if (!mergeResult.ok && !isAlreadyDoneError(mergeResult.error)) {
+      logGhError("slice-pr-merge", mergeResult.error);
+      return; // Leave state as "open" so next sync retries the merge
+    }
   }
 
   sliceRecord.state = "closed";
@@ -420,16 +454,21 @@ async function syncMilestoneComplete(
   const record = getMilestoneRecord(mapping, mid);
   if (!record || record.state === "closed") return;
 
-  // Close tracking issue
-  ghCloseIssue(
+  // Close tracking issue — only update mapping if it succeeds
+  const closeResult = ghCloseIssue(
     basePath,
     mapping.repo,
     record.issueNumber,
     `Milestone ${mid} completed.`,
   );
+  if (!closeResult.ok && !isAlreadyDoneError(closeResult.error)) {
+    logGhError("milestone-close-issue", closeResult.error);
+    return; // Leave state as "open" so next sync retries
+  }
 
   // Close GitHub milestone
-  ghCloseMilestone(basePath, mapping.repo, record.ghMilestoneNumber);
+  const milestoneResult = ghCloseMilestone(basePath, mapping.repo, record.ghMilestoneNumber);
+  if (!milestoneResult.ok) logGhError("milestone-close-gh-milestone", milestoneResult.error);
 
   record.state = "closed";
   record.lastSyncedAt = new Date().toISOString();
@@ -495,6 +534,32 @@ export async function bootstrapSync(basePath: string): Promise<{
   counts.tasks = Object.keys(mapping.tasks).length - taskCountBefore;
   saveSyncMapping(basePath, mapping);
   return counts;
+}
+
+// ─── Preflight Check ─────────────────────────────────────────────────────────
+
+/**
+ * Preflight check for GitHub sync availability.
+ * Called at auto-mode bootstrap to warn early if sync is enabled but
+ * `gh` is not available. Non-fatal — warns and disables sync for the session.
+ */
+export function checkGitHubSyncPreflight(basePath: string): { ok: boolean; reason?: string } {
+  const config = loadGitHubSyncConfig(basePath);
+  if (!config?.enabled) return { ok: true }; // sync is off, nothing to check
+
+  if (!ghIsAvailable()) {
+    return { ok: false, reason: "gh CLI not found or not authenticated" };
+  }
+
+  // Skip repo detection if explicitly configured (supports non-git dirs)
+  if (!config.repo) {
+    const repo = ghDetectRepo(basePath);
+    if (!repo.ok) {
+      return { ok: false, reason: "could not detect GitHub repo — check git remote or set github.repo" };
+    }
+  }
+
+  return { ok: true };
 }
 
 // ─── Config Loading ─────────────────────────────────────────────────────────

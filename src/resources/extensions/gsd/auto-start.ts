@@ -192,6 +192,18 @@ export async function bootstrapAutoSession(
       loadEffectiveGSDPreferences()?.preferences?.git ?? {},
     );
 
+    // GitHub sync preflight: warn early if gh is unavailable and sync is enabled.
+    // Non-fatal — warns and continues. Better UX than discovering post-unit.
+    try {
+      const { checkGitHubSyncPreflight } = await import("../github-sync/sync.js");
+      const ghPreflight = checkGitHubSyncPreflight(base);
+      if (!ghPreflight.ok) {
+        ctx.ui.notify(`GitHub sync: ${ghPreflight.reason} — sync will be skipped this session`, "warning");
+      }
+    } catch {
+      // github-sync extension not available — skip silently
+    }
+
     // Check for crash from previous session. Skip our own fresh bootstrap lock.
     const crashLock = readCrashLock(base);
     if (crashLock && crashLock.pid !== process.pid) {

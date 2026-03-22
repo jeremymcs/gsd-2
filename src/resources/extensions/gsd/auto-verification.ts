@@ -51,18 +51,22 @@ export async function runPostUnitVerification(
 ): Promise<VerificationResult> {
   const { s, ctx, pi } = vctx;
 
-  if (!s.currentUnit || s.currentUnit.type !== "execute-task") {
+  // Gate applies to execute-task (full retry) and complete-slice (advisory — pause only)
+  const GATED_UNIT_TYPES = new Set(["execute-task", "complete-slice"]);
+  if (!s.currentUnit || !GATED_UNIT_TYPES.has(s.currentUnit.type)) {
     return "continue";
   }
+  const isAdvisoryUnit = s.currentUnit.type !== "execute-task";
 
   try {
     const effectivePrefs = loadEffectiveGSDPreferences();
     const prefs = effectivePrefs?.preferences;
 
-    // Read task plan verify field
+    // Read task plan verify field (only for execute-task — other unit types
+    // don't have per-task verification commands)
     const parts = s.currentUnit.id.split("/");
     let taskPlanVerify: string | undefined;
-    if (parts.length >= 3) {
+    if (!isAdvisoryUnit && parts.length >= 3) {
       const [mid, sid, tid] = parts;
       const planFile = resolveSliceFile(s.basePath, mid, sid, "PLAN");
       if (planFile) {
@@ -197,6 +201,17 @@ export async function runPostUnitVerification(
       s.verificationRetryCount.delete(s.currentUnit.id);
       s.pendingVerificationRetry = null;
       return "continue";
+    } else if (isAdvisoryUnit) {
+      // Advisory units (e.g., complete-slice): no auto-fix retries,
+      // just pause for human review so broken merges don't cascade.
+      s.verificationRetryCount.delete(s.currentUnit.id);
+      s.pendingVerificationRetry = null;
+      ctx.ui.notify(
+        `Verification gate FAILED after ${s.currentUnit.type} — pausing for human review`,
+        "error",
+      );
+      await pauseAuto(ctx, pi);
+      return "pause";
     } else if (autoFixEnabled && attempt + 1 <= maxRetries) {
       const nextAttempt = attempt + 1;
       s.verificationRetryCount.set(s.currentUnit.id, nextAttempt);

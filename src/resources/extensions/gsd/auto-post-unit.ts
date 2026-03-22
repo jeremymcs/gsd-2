@@ -170,6 +170,19 @@ export async function postUnitPreVerification(pctx: PostUnitContext, opts?: PreV
       }
     } catch (e) {
       debugLog("postUnit", { phase: "auto-commit", error: String(e) });
+      // If we are inside a worktree, a commit failure is critical — code exists
+      // only in the working tree and will be destroyed by `git worktree remove`
+      // during teardown.  Pause auto-mode to prevent silent data loss.
+      const inWorktree = !!(s.originalBasePath && s.originalBasePath !== s.basePath);
+      if (inWorktree) {
+        ctx.ui.notify(
+          `Auto-commit FAILED in worktree — pausing to prevent work loss on teardown. Fix git state and resume.\n${String(e).split("\n")[0]}`,
+          "error",
+        );
+        await pauseAuto(ctx, pi);
+        return "dispatched";
+      }
+      // Outside worktree — warn but continue (code is safe on disk in the project root)
       ctx.ui.notify(`Auto-commit failed: ${String(e).split("\n")[0]}`, "warning");
     }
 
