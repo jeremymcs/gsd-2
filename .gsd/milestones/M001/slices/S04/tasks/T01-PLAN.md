@@ -93,3 +93,9 @@ Create the three new pure modules that form the foundation of S04. These have no
 - `src/resources/extensions/gsd/custom-execution-policy.ts` — stub execution policy
 - `src/resources/extensions/gsd/tests/run-manager.test.ts` — run manager unit tests
 - `src/resources/extensions/gsd/tests/custom-workflow-engine.test.ts` — custom engine + policy unit tests
+
+## Observability Impact
+
+- **New inspection surfaces:** `cat .gsd/workflow-runs/<name>/<timestamp>/GRAPH.yaml` shows step statuses; `cat .gsd/workflow-runs/<name>/<timestamp>/DEFINITION.yaml` shows the frozen definition used at run creation; `cat .gsd/workflow-runs/<name>/<timestamp>/PARAMS.json` shows parameter overrides.
+- **Failure visibility:** `createRun()` errors include the full definition file path. `reconcile()` throws with step ID when a step is not found. GRAPH.yaml retains per-step `status` and `finishedAt` timestamps — if a run fails mid-execution, the graph shows which step was last active.
+- **Future agent inspection:** `listRuns()` returns structured metadata (step counts, overall status) for any agent to query programmatically. `getDisplayMetadata()` provides standardized progress ("Step N/M") that downstream dashboards consume.

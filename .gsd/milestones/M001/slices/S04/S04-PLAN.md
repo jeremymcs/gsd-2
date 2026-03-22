@@ -29,6 +29,7 @@
 - `node --experimental-strip-types --test src/resources/extensions/gsd/tests/custom-engine-loop-integration.test.ts` — 3-step workflow dispatches through autoLoop
 - `node --experimental-strip-types --test src/resources/extensions/gsd/tests/auto-session-encapsulation.test.ts` — session encapsulation invariant holds
 - `node --experimental-strip-types --test src/resources/extensions/gsd/tests/dev-engine-wrapper.test.ts` — dev engine tests still pass (regression)
+- Failure-path diagnostic: `createRun()` with unknown definition throws an error containing the missing file path; `reconcile()` with invalid step ID throws; GRAPH.yaml preserves `active` status on mid-step failure for post-mortem inspection
 
 ## Observability / Diagnostics
 
@@ -45,7 +46,7 @@
 
 ## Tasks
 
-- [ ] **T01: Implement run-manager, CustomWorkflowEngine, and CustomExecutionPolicy** `est:45m`
+- [x] **T01: Implement run-manager, CustomWorkflowEngine, and CustomExecutionPolicy** `est:45m`
   - Why: Creates the three new pure modules that S04 depends on — the run directory manager, the custom engine implementing `WorkflowEngine`, and the stub execution policy. These have no loop dependencies and are independently testable.
   - Files: `src/resources/extensions/gsd/run-manager.ts`, `src/resources/extensions/gsd/custom-workflow-engine.ts`, `src/resources/extensions/gsd/custom-execution-policy.ts`, `src/resources/extensions/gsd/tests/run-manager.test.ts`, `src/resources/extensions/gsd/tests/custom-workflow-engine.test.ts`
   - Do: Build `run-manager.ts` with `createRun(basePath, defName, overrides?)` and `listRuns(basePath, defName?)`. Build `CustomWorkflowEngine` implementing `WorkflowEngine` — `deriveState()` reads GRAPH.yaml, `resolveDispatch()` calls `getNextPendingStep()`, `reconcile()` calls `markStepComplete()` + `writeGraph()`, `getDisplayMetadata()` returns step N/M progress. Build `CustomExecutionPolicy` implementing `ExecutionPolicy` with all methods stubbed. Write comprehensive unit tests for all three. Use `.js` extension on all relative imports. Run directory convention: `.gsd/workflow-runs/<name>/<timestamp>/` with DEFINITION.yaml, GRAPH.yaml, optional PARAMS.json.
