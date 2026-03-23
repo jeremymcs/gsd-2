@@ -27,6 +27,7 @@
 - `node --import ./src/resources/extensions/gsd/tests/resolve-ts.mjs --experimental-strip-types --test src/resources/extensions/gsd/tests/planning-crossval.test.ts` — DB↔rendered parity
 - `rg 'parseRoadmapSlices|parseRoadmap|parsePlan' src/resources/extensions/gsd/dispatch-guard.ts src/resources/extensions/gsd/auto-verification.ts src/resources/extensions/gsd/parallel-eligibility.ts` returns no matches (parser imports removed from migrated files)
 - `rg 'parseRoadmap' src/resources/extensions/gsd/auto-dispatch.ts` returns no matches (parser import narrowed)
+- Diagnostic: `node -e "const{openDatabase,getMilestoneSlices}=require('./src/resources/extensions/gsd/gsd-db.ts');openDatabase(':memory:');console.log(getMilestoneSlices('NONEXISTENT'))"` — returns empty array `[]` (no crash on missing milestone, observable failure state)
 
 ## Observability / Diagnostics
 
@@ -42,7 +43,7 @@
 
 ## Tasks
 
-- [ ] **T01: Add schema v9 migration with sequence column and fix ORDER BY queries** `est:30m`
+- [x] **T01: Add schema v9 migration with sequence column and fix ORDER BY queries** `est:30m`
   - Why: R016 requires sequence-aware ordering. All caller migrations and cross-validation depend on correct query ordering.
   - Files: `src/resources/extensions/gsd/gsd-db.ts`, `src/resources/extensions/gsd/tests/schema-v9-sequence.test.ts`
   - Do: Add `sequence INTEGER DEFAULT 0` to slices and tasks tables in a `currentVersion < 9` migration block. Bump `SCHEMA_VERSION` to 9. Update `SliceRow` and `TaskRow` interfaces to include `sequence: number`. Change all 6 `ORDER BY id` queries to `ORDER BY sequence, id`. Add `insertSlicePlanning`/`insertTask` to accept optional `sequence` param. Write test file proving: migration adds column, ORDER BY respects sequence, null/0 sequence falls back to id ordering, backfill from positional order.

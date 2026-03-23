@@ -54,3 +54,11 @@ Add a `sequence INTEGER DEFAULT 0` column to the `slices` and `tasks` tables via
 
 - `src/resources/extensions/gsd/gsd-db.ts` — updated with schema v9, sequence field, ORDER BY changes
 - `src/resources/extensions/gsd/tests/schema-v9-sequence.test.ts` — new test file proving sequence ordering
+
+## Observability Impact
+
+- **Schema version**: `SCHEMA_VERSION` constant changes from 8 → 9; `schema_version` table gains a row for version 9 with timestamp
+- **Column visibility**: `PRAGMA table_info(slices)` and `PRAGMA table_info(tasks)` now show `sequence INTEGER DEFAULT 0`
+- **Query ordering**: All slice/task list queries sort by `sequence, id` — inspectable via `EXPLAIN QUERY PLAN` or by inserting rows with non-lexicographic sequence values
+- **Failure state**: `getMilestoneSlices('NONEXISTENT')` returns `[]` (empty array, no crash); `getSliceTasks` with no DB open returns `[]`
+- **Interface change**: `SliceRow.sequence` and `TaskRow.sequence` fields available to all downstream consumers

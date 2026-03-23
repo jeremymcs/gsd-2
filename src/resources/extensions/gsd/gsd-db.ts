@@ -145,7 +145,7 @@ function openRawDb(path: string): unknown {
   return new Database(path);
 }
 
-const SCHEMA_VERSION = 8;
+const SCHEMA_VERSION = 9;
 
 function initSchema(db: DbAdapter, fileBacked: boolean): void {
   if (fileBacked) db.exec("PRAGMA journal_mode=WAL");
@@ -267,6 +267,7 @@ function initSchema(db: DbAdapter, fileBacked: boolean): void {
         proof_level TEXT NOT NULL DEFAULT '',
         integration_closure TEXT NOT NULL DEFAULT '',
         observability_impact TEXT NOT NULL DEFAULT '',
+        sequence INTEGER DEFAULT 0,
         PRIMARY KEY (milestone_id, id),
         FOREIGN KEY (milestone_id) REFERENCES milestones(id)
       )
@@ -297,6 +298,7 @@ function initSchema(db: DbAdapter, fileBacked: boolean): void {
         inputs TEXT NOT NULL DEFAULT '[]',
         expected_output TEXT NOT NULL DEFAULT '[]',
         observability_impact TEXT NOT NULL DEFAULT '',
+        sequence INTEGER DEFAULT 0,
         PRIMARY KEY (milestone_id, slice_id, id),
         FOREIGN KEY (milestone_id, slice_id) REFERENCES slices(milestone_id, id)
       )
@@ -588,6 +590,16 @@ function migrateSchema(db: DbAdapter): void {
 
       db.prepare("INSERT INTO schema_version (version, applied_at) VALUES (:version, :applied_at)").run({
         ":version": 8,
+        ":applied_at": new Date().toISOString(),
+      });
+    }
+
+    if (currentVersion < 9) {
+      ensureColumn(db, "slices", "sequence", `ALTER TABLE slices ADD COLUMN sequence INTEGER DEFAULT 0`);
+      ensureColumn(db, "tasks", "sequence", `ALTER TABLE tasks ADD COLUMN sequence INTEGER DEFAULT 0`);
+
+      db.prepare("INSERT INTO schema_version (version, applied_at) VALUES (:version, :applied_at)").run({
+        ":version": 9,
         ":applied_at": new Date().toISOString(),
       });
     }
@@ -967,16 +979,17 @@ export function insertSlice(s: {
   risk?: string;
   depends?: string[];
   demo?: string;
+  sequence?: number;
   planning?: Partial<SlicePlanningRecord>;
 }): void {
   if (!currentDb) throw new GSDError(GSD_STALE_STATE, "gsd-db: No database open");
   currentDb.prepare(
     `INSERT OR IGNORE INTO slices (
       milestone_id, id, title, status, risk, depends, demo, created_at,
-      goal, success_criteria, proof_level, integration_closure, observability_impact
+      goal, success_criteria, proof_level, integration_closure, observability_impact, sequence
     ) VALUES (
       :milestone_id, :id, :title, :status, :risk, :depends, :demo, :created_at,
-      :goal, :success_criteria, :proof_level, :integration_closure, :observability_impact
+      :goal, :success_criteria, :proof_level, :integration_closure, :observability_impact, :sequence
     )`,
   ).run({
     ":milestone_id": s.milestoneId,
@@ -992,6 +1005,7 @@ export function insertSlice(s: {
     ":proof_level": s.planning?.proofLevel ?? "",
     ":integration_closure": s.planning?.integrationClosure ?? "",
     ":observability_impact": s.planning?.observabilityImpact ?? "",
+    ":sequence": s.sequence ?? 0,
   });
 }
 
@@ -1032,6 +1046,7 @@ export function insertTask(t: {
   keyFiles?: string[];
   keyDecisions?: string[];
   fullSummaryMd?: string;
+  sequence?: number;
   planning?: Partial<TaskPlanningRecord>;
 }): void {
   if (!currentDb) throw new GSDError(GSD_STALE_STATE, "gsd-db: No database open");
@@ -1040,12 +1055,12 @@ export function insertTask(t: {
       milestone_id, slice_id, id, title, status, one_liner, narrative,
       verification_result, duration, completed_at, blocker_discovered,
       deviations, known_issues, key_files, key_decisions, full_summary_md,
-      description, estimate, files, verify, inputs, expected_output, observability_impact
+      description, estimate, files, verify, inputs, expected_output, observability_impact, sequence
     ) VALUES (
       :milestone_id, :slice_id, :id, :title, :status, :one_liner, :narrative,
       :verification_result, :duration, :completed_at, :blocker_discovered,
       :deviations, :known_issues, :key_files, :key_decisions, :full_summary_md,
-      :description, :estimate, :files, :verify, :inputs, :expected_output, :observability_impact
+      :description, :estimate, :files, :verify, :inputs, :expected_output, :observability_impact, :sequence
     )`,
   ).run({
     ":milestone_id": t.milestoneId,
@@ -1071,6 +1086,7 @@ export function insertTask(t: {
     ":inputs": JSON.stringify(t.planning?.inputs ?? []),
     ":expected_output": JSON.stringify(t.planning?.expectedOutput ?? []),
     ":observability_impact": t.planning?.observabilityImpact ?? "",
+    ":sequence": t.sequence ?? 0,
   });
 }
 
@@ -1133,6 +1149,7 @@ export interface SliceRow {
   proof_level: string;
   integration_closure: string;
   observability_impact: string;
+  sequence: number;
 }
 
 function rowToSlice(row: Record<string, unknown>): SliceRow {
@@ -1153,6 +1170,7 @@ function rowToSlice(row: Record<string, unknown>): SliceRow {
     proof_level: (row["proof_level"] as string) ?? "",
     integration_closure: (row["integration_closure"] as string) ?? "",
     observability_impact: (row["observability_impact"] as string) ?? "",
+    sequence: (row["sequence"] as number) ?? 0,
   };
 }
 
@@ -1200,6 +1218,7 @@ export interface TaskRow {
   inputs: string[];
   expected_output: string[];
   observability_impact: string;
+  sequence: number;
 }
 
 function rowToTask(row: Record<string, unknown>): TaskRow {
@@ -1227,6 +1246,7 @@ function rowToTask(row: Record<string, unknown>): TaskRow {
     inputs: JSON.parse((row["inputs"] as string) || "[]"),
     expected_output: JSON.parse((row["expected_output"] as string) || "[]"),
     observability_impact: (row["observability_impact"] as string) ?? "",
+    sequence: (row["sequence"] as number) ?? 0,
   };
 }
 
@@ -1242,7 +1262,7 @@ export function getTask(milestoneId: string, sliceId: string, taskId: string): T
 export function getSliceTasks(milestoneId: string, sliceId: string): TaskRow[] {
   if (!currentDb) return [];
   const rows = currentDb.prepare(
-    "SELECT * FROM tasks WHERE milestone_id = :mid AND slice_id = :sid ORDER BY id",
+    "SELECT * FROM tasks WHERE milestone_id = :mid AND slice_id = :sid ORDER BY sequence, id",
   ).all({ ":mid": milestoneId, ":sid": sliceId });
   return rows.map(rowToTask);
 }
@@ -1361,7 +1381,7 @@ export function getActiveMilestoneFromDb(): MilestoneRow | null {
 export function getActiveSliceFromDb(milestoneId: string): SliceRow | null {
   if (!currentDb) return null;
   const rows = currentDb.prepare(
-    "SELECT * FROM slices WHERE milestone_id = :mid AND status NOT IN ('complete', 'done') ORDER BY id",
+    "SELECT * FROM slices WHERE milestone_id = :mid AND status NOT IN ('complete', 'done') ORDER BY sequence, id",
   ).all({ ":mid": milestoneId });
   if (rows.length === 0) return null;
 
@@ -1382,7 +1402,7 @@ export function getActiveSliceFromDb(milestoneId: string): SliceRow | null {
 export function getActiveTaskFromDb(milestoneId: string, sliceId: string): TaskRow | null {
   if (!currentDb) return null;
   const row = currentDb.prepare(
-    "SELECT * FROM tasks WHERE milestone_id = :mid AND slice_id = :sid AND status NOT IN ('complete', 'done') ORDER BY id LIMIT 1",
+    "SELECT * FROM tasks WHERE milestone_id = :mid AND slice_id = :sid AND status NOT IN ('complete', 'done') ORDER BY sequence, id LIMIT 1",
   ).get({ ":mid": milestoneId, ":sid": sliceId });
   if (!row) return null;
   return rowToTask(row);
@@ -1390,7 +1410,7 @@ export function getActiveTaskFromDb(milestoneId: string, sliceId: string): TaskR
 
 export function getMilestoneSlices(milestoneId: string): SliceRow[] {
   if (!currentDb) return [];
-  const rows = currentDb.prepare("SELECT * FROM slices WHERE milestone_id = :mid ORDER BY id").all({ ":mid": milestoneId });
+  const rows = currentDb.prepare("SELECT * FROM slices WHERE milestone_id = :mid ORDER BY sequence, id").all({ ":mid": milestoneId });
   return rows.map(rowToSlice);
 }
 
