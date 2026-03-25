@@ -127,8 +127,11 @@ export function isInheritedRepo(basePath: string): boolean {
     // (i.e. the parent project was initialised with GSD).
     if (isProjectGsd(join(root, ".gsd"))) return false;
 
-    // Also walk up from basePath to the git root checking for .gsd
-    let dir = normalizedBase;
+    // Walk up from basePath's parent to the git root checking for .gsd.
+    // Start at dirname(normalizedBase), NOT normalizedBase itself — finding
+    // .gsd at basePath means GSD state is set up for THIS project, which
+    // says nothing about whether the git repo is inherited from an ancestor.
+    let dir = dirname(normalizedBase);
     while (dir !== normalizedRoot && dir !== dirname(dir)) {
       if (isProjectGsd(join(dir, ".gsd"))) return false;
       dir = dirname(dir);

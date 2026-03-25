@@ -140,13 +140,14 @@ export async function bootstrapAutoSession(
       return releaseLockAndReturn();
     }
 
-    // Ensure git repo exists.
-    // Guard against inherited repos: if `base` is a subdirectory of another
-    // git repo that has no .gsd (i.e. the parent project was never initialised
-    // with GSD), create a fresh git repo at `base` so it gets its own identity
-    // hash. Without this, repoIdentity() resolves to the parent repo's hash
-    // and loads milestones from an unrelated project (#1639).
-    if (!nativeIsRepo(base) || isInheritedRepo(base)) {
+    // Ensure git repo exists *locally* at base.
+    // nativeIsRepo() uses `git rev-parse` which traverses up to parent dirs,
+    // so a parent repo can make it return true even when base has no .git of
+    // its own. Check for a local .git instead (defense-in-depth for the case
+    // where isInheritedRepo() returns a false negative, e.g. stale .gsd at
+    // the parent git root). See #2393 and related issue.
+    const hasLocalGit = existsSync(join(base, ".git"));
+    if (!hasLocalGit || isInheritedRepo(base)) {
       const mainBranch =
         loadEffectiveGSDPreferences()?.preferences?.git?.main_branch || "main";
       nativeInit(base, mainBranch);
