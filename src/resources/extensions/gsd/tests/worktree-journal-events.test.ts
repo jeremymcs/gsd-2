@@ -83,11 +83,15 @@ function readJournalEntries(basePath: string): JournalEntry[] {
 
 describe("worktree journal events", () => {
   let tmp: string;
+  const originalCwd = process.cwd();
 
   beforeEach(() => {
     tmp = mkdtempSync(join(tmpdir(), "wt-journal-"));
   });
   afterEach(() => {
+    // Restore cwd before cleanup — on Windows, rmSync fails with EPERM
+    // if the process cwd is inside the directory being deleted.
+    try { process.chdir(originalCwd); } catch { /* best-effort */ }
     rmSync(tmp, { recursive: true, force: true });
   });
 
