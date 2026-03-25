@@ -6,6 +6,7 @@ import { findMilestoneIds, nextMilestoneId, claimReservedId, getReservedMileston
 import { loadEffectiveGSDPreferences } from "../preferences.js";
 import { ensureDbOpen } from "./dynamic-tools.js";
 import { StringEnum } from "@gsd/pi-ai";
+import { logError } from "../workflow-logger.js";
 
 /**
  * Register an alias tool that shares the same execute function as its canonical counterpart.
@@ -52,7 +53,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: gsd_decision_save tool failed: ${msg}\n`);
+      logError("tool", `gsd_decision_save tool failed: ${msg}`, { tool: "gsd_decision_save", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error saving decision: ${msg}` }],
         details: { operation: "save_decision", error: msg } as any,
@@ -143,7 +144,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: gsd_requirement_update tool failed: ${msg}\n`);
+      logError("tool", `gsd_requirement_update tool failed: ${msg}`, { tool: "gsd_requirement_update", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error updating requirement: ${msg}` }],
         details: { operation: "update_requirement", id: params.id, error: msg } as any,
@@ -239,7 +240,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: gsd_summary_save tool failed: ${msg}\n`);
+      logError("tool", `gsd_summary_save tool failed: ${msg}`, { tool: "gsd_summary_save", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error saving artifact: ${msg}` }],
         details: { operation: "save_summary", error: msg } as any,
@@ -402,7 +403,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: plan_milestone tool failed: ${msg}\n`);
+      logError("tool", `plan_milestone tool failed: ${msg}`, { tool: "gsd_plan_milestone", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error planning milestone: ${msg}` }],
         details: { operation: "plan_milestone", error: msg } as any,
@@ -495,7 +496,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: plan_slice tool failed: ${msg}\n`);
+      logError("tool", `plan_slice tool failed: ${msg}`, { tool: "gsd_plan_slice", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error planning slice: ${msg}` }],
         details: { operation: "plan_slice", error: msg } as any,
@@ -572,7 +573,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: plan_task tool failed: ${msg}\n`);
+      logError("tool", `plan_task tool failed: ${msg}`, { tool: "gsd_plan_task", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error planning task: ${msg}` }],
         details: { operation: "plan_task", error: msg } as any,
@@ -642,7 +643,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: complete_task tool failed: ${msg}\n`);
+      logError("tool", `complete_task tool failed: ${msg}`, { tool: "gsd_task_complete", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error completing task: ${msg}` }],
         details: { operation: "complete_task", error: msg } as any,
@@ -723,7 +724,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: complete_slice tool failed: ${msg}\n`);
+      logError("tool", `complete_slice tool failed: ${msg}`, { tool: "gsd_slice_complete", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error completing slice: ${msg}` }],
         details: { operation: "complete_slice", error: msg } as any,
@@ -834,7 +835,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: complete_milestone tool failed: ${msg}\n`);
+      logError("tool", `complete_milestone tool failed: ${msg}`, { tool: "gsd_complete_milestone", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error completing milestone: ${msg}` }],
         details: { operation: "complete_milestone", error: msg } as any,
@@ -904,7 +905,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: validate_milestone tool failed: ${msg}\n`);
+      logError("tool", `validate_milestone tool failed: ${msg}`, { tool: "gsd_validate_milestone", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error validating milestone: ${msg}` }],
         details: { operation: "validate_milestone", error: msg } as any,
@@ -973,7 +974,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: replan_slice tool failed: ${msg}\n`);
+      logError("tool", `replan_slice tool failed: ${msg}`, { tool: "gsd_replan_slice", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error replanning slice: ${msg}` }],
         details: { operation: "replan_slice", error: msg } as any,
@@ -1053,7 +1054,7 @@ export function registerDbTools(pi: ExtensionAPI): void {
       };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      process.stderr.write(`gsd-db: reassess_roadmap tool failed: ${msg}\n`);
+      logError("tool", `reassess_roadmap tool failed: ${msg}`, { tool: "gsd_reassess_roadmap", error: String(err) });
       return {
         content: [{ type: "text" as const, text: `Error reassessing roadmap: ${msg}` }],
         details: { operation: "reassess_roadmap", error: msg } as any,

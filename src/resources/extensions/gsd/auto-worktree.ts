@@ -42,6 +42,7 @@ import {
 } from "./worktree.js";
 import { MergeConflictError, readIntegrationBranch, RUNTIME_EXCLUSION_PATHS } from "./git-service.js";
 import { debugLog } from "./debug-logger.js";
+import { logWarning } from "./workflow-logger.js";
 import { loadEffectiveGSDPreferences } from "./preferences.js";
 import {
   nativeGetCurrentBranch,
@@ -700,7 +701,7 @@ export function createAutoWorktree(
   const hookError = runWorktreePostCreateHook(basePath, info.path);
   if (hookError) {
     // Non-fatal — log but don't prevent worktree usage
-    console.error(`[GSD] ${hookError}`);
+    logWarning("reconcile", hookError, { worktree: name });
   }
 
   const previousCwd = process.cwd();
@@ -793,10 +794,12 @@ export function teardownAutoWorktree(
   // backslashes (#1436), leaving ~1 GB+ orphaned directories.
   const wtDir = worktreePath(originalBasePath, milestoneId);
   if (existsSync(wtDir)) {
-    console.error(
-      `[GSD] WARNING: Worktree directory still exists after teardown: ${wtDir}\n` +
-        `  This is likely an orphaned directory consuming disk space.\n` +
-        `  Remove it manually with: rm -rf "${wtDir.replaceAll("\\", "/")}"`,
+    logWarning(
+      "reconcile",
+      `Worktree directory still exists after teardown: ${wtDir}. ` +
+        `This is likely an orphaned directory consuming disk space. ` +
+        `Remove it manually with: rm -rf "${wtDir.replaceAll("\\", "/")}"`,
+      { worktree: milestoneId },
     );
     // Attempt a direct filesystem removal as a fallback
     try {

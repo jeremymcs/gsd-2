@@ -30,6 +30,7 @@ import { PROJECT_FILES } from "../detection.js";
 import { MergeConflictError } from "../git-service.js";
 import { join } from "node:path";
 import { existsSync, cpSync } from "node:fs";
+import { logWarning, logError } from "../workflow-logger.js";
 
 // ─── generateMilestoneReport ──────────────────────────────────────────────────
 
@@ -164,8 +165,8 @@ export async function runPreDispatch(
       debugLog("autoLoop", { phase: "exit", reason: "health-gate-failed" });
       return { action: "break", reason: "health-gate-failed" };
     }
-  } catch {
-    // Non-fatal
+  } catch (e) {
+    logWarning("engine", "Pre-dispatch health gate threw unexpectedly", { error: String(e) });
   }
 
   // Sync project root artifacts into worktree
@@ -247,7 +248,8 @@ export async function runPreDispatch(
         await deps.stopAuto(ctx, pi, `Merge conflict on milestone ${s.currentMilestoneId}`);
         return { action: "break", reason: "merge-conflict" };
       }
-      // Non-conflict errors — log and continue
+      // Non-conflict merge errors — log and continue
+      logWarning("engine", "Milestone merge failed with non-conflict error", { milestone: s.currentMilestoneId!, error: String(mergeErr) });
     }
 
     // PR creation (auto_pr) is handled inside mergeMilestoneToMain (#2302)
@@ -290,7 +292,9 @@ export async function runPreDispatch(
         cpSync(completedKeysPath, archivePath);
       }
       atomicWriteSync(completedKeysPath, JSON.stringify([], null, 2));
-    } catch { /* non-fatal */ }
+    } catch (e) {
+      logWarning("engine", "Failed to archive completed-units on milestone transition", { error: String(e) });
+    }
 
     // Rebuild STATE.md immediately so it reflects the new active milestone.
     // This bypasses the 30-second throttle in the normal rebuild path —
@@ -298,8 +302,8 @@ export async function runPreDispatch(
     // immediate write.
     try {
       await deps.rebuildState(s.basePath);
-    } catch {
-      // Non-fatal — STATE.md will be rebuilt on the next regular cycle
+    } catch (e) {
+      logWarning("engine", "STATE.md rebuild failed after milestone transition", { error: String(e) });
     }
   }
 
@@ -919,8 +923,8 @@ export async function runUnitPhase(
         (decisionsContent?.length ?? 0) +
         (requirementsContent?.length ?? 0) +
         (projectContent?.length ?? 0);
-    } catch {
-      // Non-fatal
+    } catch (e) {
+      logWarning("engine", "Baseline char count measurement failed", { error: String(e) });
     }
   }
 
@@ -930,9 +934,7 @@ export async function runUnitPhase(
   } catch (reorderErr) {
     const msg =
       reorderErr instanceof Error ? reorderErr.message : String(reorderErr);
-    process.stderr.write(
-      `[gsd] prompt reorder failed (non-fatal): ${msg}\n`,
-    );
+    logWarning("engine", "Prompt reorder failed", { error: msg });
   }
 
   // Select and apply model (with tier escalation on retry — normal units only)
@@ -1135,7 +1137,9 @@ export async function runUnitPhase(
       const completedKeysPath = join(gsdRoot(s.basePath), "completed-units.json");
       const keys = s.completedUnits.map((u) => `${u.type}/${u.id}`);
       atomicWriteSync(completedKeysPath, JSON.stringify(keys, null, 2));
-    } catch { /* non-fatal: disk flush failure */ }
+    } catch (e) {
+      logWarning("engine", "Failed to flush completed-units to disk", { error: String(e) });
+    }
 
     deps.clearUnitRuntimeRecord(s.basePath, unitType, unitId);
     s.unitDispatchCount.delete(`${unitType}/${unitId}`);

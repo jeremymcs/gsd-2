@@ -14,6 +14,7 @@ import type { Decision, Requirement } from './types.js';
 import { resolveGsdRootFile } from './paths.js';
 import { saveFile } from './files.js';
 import { GSDError, GSD_STALE_STATE, GSD_IO_ERROR } from './errors.js';
+import { logWarning, logError } from './workflow-logger.js';
 import { invalidateStateCache } from './state.js';
 import { clearPathCache } from './paths.js';
 import { clearParseCache } from './files.js';
@@ -221,7 +222,7 @@ export async function nextDecisionId(): Promise<string> {
     const next = maxNum + 1;
     return `D${String(next).padStart(3, '0')}`;
   } catch (err) {
-    process.stderr.write(`gsd-db: nextDecisionId failed: ${(err as Error).message}\n`);
+    logError('manifest', 'nextDecisionId failed', { fn: 'nextDecisionId', error: String((err as Error).message) });
     return 'D001';
   }
 }
@@ -311,9 +312,7 @@ export async function saveDecisionToDb(
     try {
       await saveFile(filePath, md);
     } catch (diskErr) {
-      process.stderr.write(
-        `gsd-db: saveDecisionToDb — disk write failed, rolling back DB row: ${(diskErr as Error).message}\n`,
-      );
+      logError('manifest', 'disk write failed, rolling back DB row', { fn: 'saveDecisionToDb', error: String((diskErr as Error).message) });
       adapter?.prepare('DELETE FROM decisions WHERE id = :id').run({ ':id': id });
       throw diskErr;
     }
@@ -325,7 +324,7 @@ export async function saveDecisionToDb(
 
     return { id };
   } catch (err) {
-    process.stderr.write(`gsd-db: saveDecisionToDb failed: ${(err as Error).message}\n`);
+    logError('manifest', 'saveDecisionToDb failed', { fn: 'saveDecisionToDb', error: String((err as Error).message) });
     throw err;
   }
 }
@@ -388,9 +387,7 @@ export async function updateRequirementInDb(
     try {
       await saveFile(filePath, md);
     } catch (diskErr) {
-      process.stderr.write(
-        `gsd-db: updateRequirementInDb — disk write failed, reverting DB row: ${(diskErr as Error).message}\n`,
-      );
+      logError('manifest', 'disk write failed, reverting DB row', { fn: 'updateRequirementInDb', error: String((diskErr as Error).message) });
       db.upsertRequirement(existing);
       throw diskErr;
     }
@@ -400,7 +397,7 @@ export async function updateRequirementInDb(
     clearPathCache();
     clearParseCache();
   } catch (err) {
-    process.stderr.write(`gsd-db: updateRequirementInDb failed: ${(err as Error).message}\n`);
+    logError('manifest', 'updateRequirementInDb failed', { fn: 'updateRequirementInDb', error: String((err as Error).message) });
     throw err;
   }
 }
@@ -444,10 +441,7 @@ export async function saveArtifactToDb(
       const existingSize = statSync(fullPath).size;
       const newSize = Buffer.byteLength(opts.content, 'utf-8');
       if (existingSize > 0 && newSize < existingSize * 0.5) {
-        process.stderr.write(
-          `gsd-db: saveArtifactToDb — new content (${newSize}B) is <50% of existing file ` +
-          `(${existingSize}B) at ${opts.path}. Preserving disk file to prevent data loss.\n`,
-        );
+        logWarning('manifest', `new content (${newSize}B) is <50% of existing file (${existingSize}B), preserving disk file`, { fn: 'saveArtifactToDb', path: opts.path });
         dbContent = readFileSync(fullPath, 'utf-8');
         skipDiskWrite = true;
       }
@@ -467,9 +461,7 @@ export async function saveArtifactToDb(
       try {
         await saveFile(fullPath, opts.content);
       } catch (diskErr) {
-        process.stderr.write(
-          `gsd-db: saveArtifactToDb — disk write failed, rolling back DB row: ${(diskErr as Error).message}\n`,
-        );
+        logError('manifest', 'disk write failed, rolling back DB row', { fn: 'saveArtifactToDb', error: String((diskErr as Error).message) });
         const rollbackAdapter = db._getAdapter();
         rollbackAdapter?.prepare('DELETE FROM artifacts WHERE path = :path').run({ ':path': opts.path });
         throw diskErr;
@@ -481,7 +473,7 @@ export async function saveArtifactToDb(
     clearPathCache();
     clearParseCache();
   } catch (err) {
-    process.stderr.write(`gsd-db: saveArtifactToDb failed: ${(err as Error).message}\n`);
+    logError('manifest', 'saveArtifactToDb failed', { fn: 'saveArtifactToDb', error: String((err as Error).message) });
     throw err;
   }
 }
