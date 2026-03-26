@@ -203,6 +203,18 @@
       {
         "command": "gsd.clearDiagnostics",
         "title": "GSD: Clear Agent Diagnostics"
+      },
+      {
+        "command": "gsd.commitAgentChanges",
+        "title": "GSD: Commit Agent Changes"
+      },
+      {
+        "command": "gsd.createAgentBranch",
+        "title": "GSD: Create Branch for Agent Work"
+      },
+      {
+        "command": "gsd.showAgentDiff",
+        "title": "GSD: Show Agent Diff"
       }
     ],
     "keybindings": [

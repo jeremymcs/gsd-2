@@ -14,6 +14,7 @@ import { GsdScmProvider } from "./scm-provider.js";
 import { GsdCheckpointProvider } from "./checkpoints.js";
 import { GsdDiagnosticBridge } from "./diagnostics.js";
 import { GsdLineDecorationManager } from "./line-decorations.js";
+import { GsdGitIntegration } from "./git-integration.js";
 
 let client: GsdClient | undefined;
 let sidebarProvider: GsdSidebarProvider | undefined;
@@ -25,6 +26,7 @@ let scmProvider: GsdScmProvider | undefined;
 let checkpointProvider: GsdCheckpointProvider | undefined;
 let diagnosticBridge: GsdDiagnosticBridge | undefined;
 let lineDecorations: GsdLineDecorationManager | undefined;
+let gitIntegration: GsdGitIntegration | undefined;
 
 function requireConnected(): boolean {
 	if (!client?.isConnected) {
@@ -163,6 +165,11 @@ export function activate(context: vscode.ExtensionContext): void {
 
 	lineDecorations = new GsdLineDecorationManager(changeTracker!);
 	context.subscriptions.push(lineDecorations);
+
+	// -- Git integration ---------------------------------------------------
+
+	gitIntegration = new GsdGitIntegration(changeTracker!, cwd);
+	context.subscriptions.push(gitIntegration);
 
 	// -- Progress notifications --------------------------------------------
 
@@ -920,6 +927,26 @@ export function activate(context: vscode.ExtensionContext): void {
 		}),
 	);
 
+	// -- Git commands -------------------------------------------------------
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("gsd.commitAgentChanges", () => {
+			gitIntegration?.commitAgentChanges();
+		}),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("gsd.createAgentBranch", () => {
+			gitIntegration?.createAgentBranch();
+		}),
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("gsd.showAgentDiff", () => {
+			gitIntegration?.showAgentDiff();
+		}),
+	);
+
 	// -- Auto-start ---------------------------------------------------------
 
 	if (config.get<boolean>("autoStart", false)) {
@@ -938,6 +965,7 @@ export function deactivate(): void {
 	checkpointProvider?.dispose();
 	diagnosticBridge?.dispose();
 	lineDecorations?.dispose();
+	gitIntegration?.dispose();
 	client = undefined;
 	sidebarProvider = undefined;
 	fileDecorations = undefined;
@@ -948,4 +976,5 @@ export function deactivate(): void {
 	checkpointProvider = undefined;
 	diagnosticBridge = undefined;
 	lineDecorations = undefined;
+	gitIntegration = undefined;
 }
