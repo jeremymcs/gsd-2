@@ -117,6 +117,19 @@
       {
         "command": "gsd.copyLastResponse",
         "title": "GSD: Copy Last Response"
+      },
+      {
+        "command": "gsd.switchSession",
+        "title": "GSD: Switch Session"
+      },
+      {
+        "command": "gsd.refreshSessions",
+        "title": "GSD: Refresh Sessions",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "gsd.clearFileDecorations",
+        "title": "GSD: Clear File Decorations"
       }
     ],
     "keybindings": [
@@ -166,6 +179,19 @@
           "type": "webview",
           "id": "gsd-sidebar",
           "name": "GSD Agent"
+        },
+        {
+          "id": "gsd-sessions",
+          "name": "Sessions"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "gsd.refreshSessions",
+          "when": "view == gsd-sessions",
+          "group": "navigation"
         }
       ]
     },

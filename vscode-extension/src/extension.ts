@@ -2,9 +2,14 @@ import * as vscode from "vscode";
 import { GsdClient, ThinkingLevel } from "./gsd-client.js";
 import { registerChatParticipant } from "./chat-participant.js";
 import { GsdSidebarProvider } from "./sidebar.js";
+import { GsdFileDecorationProvider } from "./file-decorations.js";
+import { GsdBashTerminal } from "./bash-terminal.js";
+import { GsdSessionTreeProvider } from "./session-tree.js";
 
 let client: GsdClient | undefined;
 let sidebarProvider: GsdSidebarProvider | undefined;
+let fileDecorations: GsdFileDecorationProvider | undefined;
+let sessionTreeProvider: GsdSessionTreeProvider | undefined;
 
 function requireConnected(): boolean {
 	if (!client?.isConnected) {
@@ -89,6 +94,27 @@ export function activate(context: vscode.ExtensionContext): void {
 		),
 	);
 
+	// -- File decorations --------------------------------------------------
+
+	fileDecorations = new GsdFileDecorationProvider(client);
+	context.subscriptions.push(
+		fileDecorations,
+		vscode.window.registerFileDecorationProvider(fileDecorations),
+	);
+
+	// -- Bash terminal -----------------------------------------------------
+
+	const bashTerminal = new GsdBashTerminal(client);
+	context.subscriptions.push(bashTerminal);
+
+	// -- Session tree view -------------------------------------------------
+
+	sessionTreeProvider = new GsdSessionTreeProvider(client);
+	context.subscriptions.push(
+		sessionTreeProvider,
+		vscode.window.registerTreeDataProvider(GsdSessionTreeProvider.viewId, sessionTreeProvider),
+	);
+
 	// -- Chat participant ---------------------------------------------------
 
 	context.subscriptions.push(registerChatParticipant(context, client));
@@ -128,6 +154,8 @@ export function activate(context: vscode.ExtensionContext): void {
 			try {
 				await client!.newSession();
 				sidebarProvider?.refresh();
+				sessionTreeProvider?.refresh();
+				fileDecorations?.clear();
 				vscode.window.showInformationMessage("New GSD session started.");
 			} catch (err) {
 				handleError(err, "Failed to start new session");
@@ -381,6 +409,43 @@ export function activate(context: vscode.ExtensionContext): void {
 		}),
 	);
 
+	// Switch Session
+	context.subscriptions.push(
+		vscode.commands.registerCommand("gsd.switchSession", async (sessionFile?: string) => {
+			if (!requireConnected()) return;
+			const file = sessionFile ?? await (async () => {
+				const input = await vscode.window.showInputBox({
+					prompt: "Enter session file path",
+					placeHolder: "/path/to/session.jsonl",
+				});
+				return input;
+			})();
+			if (!file) return;
+			try {
+				await client!.switchSession(file);
+				sidebarProvider?.refresh();
+				sessionTreeProvider?.refresh();
+				vscode.window.showInformationMessage("Switched session.");
+			} catch (err) {
+				handleError(err, "Failed to switch session");
+			}
+		}),
+	);
+
+	// Refresh Sessions
+	context.subscriptions.push(
+		vscode.commands.registerCommand("gsd.refreshSessions", () => {
+			sessionTreeProvider?.refresh();
+		}),
+	);
+
+	// Clear File Decorations
+	context.subscriptions.push(
+		vscode.commands.registerCommand("gsd.clearFileDecorations", () => {
+			fileDecorations?.clear();
+		}),
+	);
+
 	// Toggle Auto-Retry
 	context.subscriptions.push(
 		vscode.commands.registerCommand("gsd.toggleAutoRetry", async () => {
@@ -456,6 +521,10 @@ export function activate(context: vscode.ExtensionContext): void {
 export function deactivate(): void {
 	client?.dispose();
 	sidebarProvider?.dispose();
+	fileDecorations?.dispose();
+	sessionTreeProvider?.dispose();
 	client = undefined;
 	sidebarProvider = undefined;
+	fileDecorations = undefined;
+	sessionTreeProvider = undefined;
 }
