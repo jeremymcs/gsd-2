@@ -31,6 +31,8 @@ export class GsdChangeTracker implements vscode.Disposable {
 	private nextCheckpointId = 1;
 	/** toolUseId → file path for in-flight tool executions */
 	private pendingTools = new Map<string, string>();
+	/** Whether the current turn has been described in the checkpoint label */
+	private turnDescribed = false;
 
 	private readonly _onDidChange = new vscode.EventEmitter<string[]>();
 	/** Fires when the set of tracked files changes. Payload is array of changed file paths. */
@@ -181,15 +183,23 @@ export class GsdChangeTracker implements vscode.Disposable {
 			case "agent_start":
 				this.createCheckpoint();
 				this.currentTurnFiles.clear();
+				this.turnDescribed = false;
 				break;
 
 			case "tool_execution_start": {
 				const toolName = String(evt.toolName ?? "");
+				const toolInput = (evt.toolInput ?? {}) as Record<string, unknown>;
+				const toolUseId = String(evt.toolUseId ?? "");
+
+				// Update checkpoint label with first action description
+				if (!this.turnDescribed) {
+					this.turnDescribed = true;
+					this.updateLatestCheckpointLabel(describeAction(toolName, toolInput));
+				}
+
 				if (toolName !== "Write" && toolName !== "Edit") break;
 
-				const toolInput = (evt.toolInput ?? {}) as Record<string, unknown>;
 				const filePath = String(toolInput.file_path ?? toolInput.path ?? "");
-				const toolUseId = String(evt.toolUseId ?? "");
 
 				if (!filePath) break;
 
@@ -229,19 +239,57 @@ export class GsdChangeTracker implements vscode.Disposable {
 	}
 
 	private createCheckpoint(): void {
-		// Only create a checkpoint if there are tracked changes
-		if (this.originals.size === 0 && this._checkpoints.length === 0) {
-			// First agent turn — create initial checkpoint with empty snapshots
-			// (nothing to restore to yet)
-		}
+		const now = Date.now();
+		const time = new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+		const fileCount = this.originals.size;
+		const label = fileCount > 0
+			? `${time} (${fileCount} file${fileCount !== 1 ? "s" : ""} tracked)`
+			: `${time} (start)`;
 
 		const checkpoint: Checkpoint = {
 			id: this.nextCheckpointId++,
-			label: `Turn ${this._checkpoints.length + 1}`,
-			timestamp: Date.now(),
+			label,
+			timestamp: now,
 			snapshots: new Map(this.originals),
 		};
 		this._checkpoints.push(checkpoint);
 		this._onCheckpointChange.fire();
+	}
+
+	/**
+	 * Update the label of the latest checkpoint with a description
+	 * of the first action taken (called after first tool execution in a turn).
+	 */
+	private updateLatestCheckpointLabel(description: string): void {
+		if (this._checkpoints.length === 0) return;
+		const latest = this._checkpoints[this._checkpoints.length - 1];
+		const time = new Date(latest.timestamp).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+		latest.label = `${time} — ${description}`;
+		this._onCheckpointChange.fire();
+	}
+}
+
+function describeAction(toolName: string, input: Record<string, unknown>): string {
+	switch (toolName) {
+		case "Read": {
+			const p = String(input.file_path ?? input.path ?? "");
+			return `Read ${p.split(/[\\/]/).pop() ?? p}`;
+		}
+		case "Write": {
+			const p = String(input.file_path ?? "");
+			return `Write ${p.split(/[\\/]/).pop() ?? p}`;
+		}
+		case "Edit": {
+			const p = String(input.file_path ?? "");
+			return `Edit ${p.split(/[\\/]/).pop() ?? p}`;
+		}
+		case "Bash":
+			return `$ ${String(input.command ?? "").slice(0, 40)}`;
+		case "Grep":
+			return `Grep: ${String(input.pattern ?? "").slice(0, 30)}`;
+		case "Glob":
+			return `Glob: ${String(input.pattern ?? "").slice(0, 30)}`;
+		default:
+			return toolName;
 	}
 }
