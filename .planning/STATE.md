@@ -3,21 +3,21 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 current_phase: 01
-current_plan: 4 of 5
+current_plan: 5 of 5
 status: executing
-stopped_at: Completed 01-03-PLAN.md
-last_updated: "2026-03-26T22:21:36.635Z"
+stopped_at: Completed 01-04-PLAN.md
+last_updated: "2026-03-26T22:22:08Z"
 progress:
   total_phases: 1
   completed_phases: 0
   total_plans: 5
-  completed_plans: 3
+  completed_plans: 4
 ---
 
 # Project State
 
 **Current Phase:** 01
-**Current Plan:** 4 of 5
+**Current Plan:** 5 of 5
 **Status:** Executing Phase 01
 **Issue:** https://github.com/gsd-build/gsd-2/issues/2659
 **ADR:** docs/ADR-004-capability-aware-model-routing.md
@@ -32,8 +32,10 @@ progress:
 - Tests placed in model-router.test.ts and complexity-classifier.test.ts per plan, not capability-router.test.ts
 - [Phase 01]: getEligibleModels replaces findModelForTier in downgrade path to enable multi-model eligible set for STEP 2 scoring
 - [Phase 01]: buildFallbackChain helper extracted to deduplicate fallback assembly in scoring and tier-only paths
+- [Phase 01 Plan 04]: emitBeforeModelSelect bound into ExtensionRuntime at ExtensionRunner construction (not bindCore) since it's a runner capability not a mode action
+- [Phase 01 Plan 04]: First-override-wins semantics for before_model_select: first handler returning non-undefined wins, loop short-circuits
 
 ## Last Session
 
-**Stopped at:** Completed 01-03-PLAN.md
-**Timestamp:** 2026-03-26T22:09:00Z
+**Stopped at:** Completed 01-04-PLAN.md
+**Timestamp:** 2026-03-26T22:22:08Z
