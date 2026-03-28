@@ -58,26 +58,26 @@ export function registerHooks(pi: ExtensionAPI): void {
           const { dirname } = await import("node:path");
           const { printWelcomeScreen } = await import(
             join(dirname(gsdBinPath), "welcome-screen.js")
-          ) as { printWelcomeScreen: (opts: { version: string; modelName?: string; provider?: string }) => void };
-          printWelcomeScreen({ version: process.env.GSD_VERSION || "0.0.0" });
+          ) as { printWelcomeScreen: (opts: { version: string; modelName?: string; provider?: string; remoteStatus?: string; lastRemotePrompt?: string }) => void };
+
+          // Gather remote questions info for the splash screen
+          let remoteStatus: string | undefined;
+          let lastRemotePrompt: string | undefined;
+          try {
+            const [{ getRemoteConfigStatus }, { getLatestPromptSummary }] = await Promise.all([
+              import("../../remote-questions/config.js"),
+              import("../../remote-questions/status.js"),
+            ]);
+            remoteStatus = getRemoteConfigStatus();
+            const latest = getLatestPromptSummary();
+            if (latest) lastRemotePrompt = `${latest.id} (${latest.status})`;
+          } catch { /* non-fatal */ }
+
+          printWelcomeScreen({ version: process.env.GSD_VERSION || "0.0.0", remoteStatus, lastRemotePrompt });
         }
       } catch { /* non-fatal */ }
     }
     loadToolApiKeys();
-    try {
-      const [{ getRemoteConfigStatus }, { getLatestPromptSummary }] = await Promise.all([
-        import("../../remote-questions/config.js"),
-        import("../../remote-questions/status.js"),
-      ]);
-      const status = getRemoteConfigStatus();
-      const latest = getLatestPromptSummary();
-      if (!status.includes("not configured")) {
-        const suffix = latest ? `\nLast remote prompt: ${latest.id} (${latest.status})` : "";
-        ctx.ui.notify(`${status}${suffix}`, status.includes("disabled") ? "warning" : "info");
-      }
-    } catch {
-      // ignore
-    }
   });
 
   pi.on("session_switch", async (_event, ctx) => {

@@ -677,10 +677,23 @@ if (!process.stdin.isTTY) {
 // Skip when the first-run banner was already printed in loader.ts (prevents double banner).
 if (!process.env.GSD_FIRST_RUN_BANNER) {
   const { printWelcomeScreen } = await import('./welcome-screen.js')
+  let remoteStatus: string | undefined
+  let lastRemotePrompt: string | undefined
+  try {
+    const [{ getRemoteConfigStatus }, { getLatestPromptSummary }] = await Promise.all([
+      import('./resources/extensions/remote-questions/config.js'),
+      import('./resources/extensions/remote-questions/status.js'),
+    ])
+    remoteStatus = getRemoteConfigStatus()
+    const latest = getLatestPromptSummary()
+    if (latest) lastRemotePrompt = `${latest.id} (${latest.status})`
+  } catch { /* non-fatal */ }
   printWelcomeScreen({
     version: process.env.GSD_VERSION || '0.0.0',
     modelName: settingsManager.getDefaultModel() || undefined,
     provider: settingsManager.getDefaultProvider() || undefined,
+    remoteStatus,
+    lastRemotePrompt,
   })
 }
 

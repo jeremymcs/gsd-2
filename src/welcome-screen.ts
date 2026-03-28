@@ -6,6 +6,7 @@
  * Falls back to simple text on narrow terminals (<70 cols) or non-TTY.
  */
 
+import { execFileSync } from 'node:child_process'
 import os from 'node:os'
 import chalk from 'chalk'
 import { GSD_LOGO } from './logo.js'
@@ -14,6 +15,8 @@ export interface WelcomeScreenOptions {
   version: string
   modelName?: string
   provider?: string
+  remoteStatus?: string
+  lastRemotePrompt?: string
 }
 
 function getShortCwd(): string {
@@ -32,11 +35,25 @@ function rpad(s: string, w: number): string {
   return s + ' '.repeat(Math.max(0, w - visLen(s)))
 }
 
+/** Read the current git branch name. Returns undefined on failure. */
+function getGitBranch(): string | undefined {
+  try {
+    return execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      encoding: 'utf-8',
+      timeout: 2000,
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim() || undefined
+  } catch {
+    return undefined
+  }
+}
+
 export function printWelcomeScreen(opts: WelcomeScreenOptions): void {
   if (!process.stderr.isTTY) return
 
-  const { version, modelName, provider } = opts
+  const { version, modelName, provider, remoteStatus, lastRemotePrompt } = opts
   const shortCwd = getShortCwd()
+  const branch = getGitBranch()
   const termWidth = Math.min((process.stderr.columns || 80) - 1, 200)
 
   // Narrow terminal fallback
@@ -76,16 +93,26 @@ export function printWelcomeScreen(opts: WelcomeScreenOptions): void {
   const footerFill = RIGHT_INNER - visLen(toolsLeft) - visLen(hintRight)
   const footerRow  = toolsLeft + ' '.repeat(Math.max(1, footerFill)) + hintRight
 
+  // Combined session line: "provider / model" or just model or just provider
+  const sessionParts = [provider, modelName].filter(Boolean)
+  const sessionLine = sessionParts.length > 0
+    ? `  Session    ${chalk.dim(sessionParts.join(' / '))}`
+    : ''
+
+  // Combined project line: "~/path [branch]"
+  const branchSuffix = branch ? ` [${branch}]` : ''
+  const projectLine = `  Project    ${chalk.dim(shortCwd + branchSuffix)}`
+
   const DIVIDER = null
   const rightRows: (string | null)[] = [
     titleRow,
     DIVIDER,
-    modelName ? `  Model      ${chalk.dim(modelName)}`  : '',
-    provider  ? `  Provider   ${chalk.dim(provider)}`   : '',
-    `  Directory  ${chalk.dim(shortCwd)}`,
+    '',
+    sessionLine,
+    projectLine,
+    '',
     DIVIDER,
     footerRow,
-    '',
   ]
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -106,6 +133,14 @@ export function printWelcomeScreen(opts: WelcomeScreenOptions): void {
       // Content row: 1 space + logo │ info (no outer vertical borders)
       out.push(' ' + lContent + chalk.dim(DV) + rpad(rRow, RIGHT_INNER))
     }
+  }
+
+  // Remote questions status (below panel, above bottom bar)
+  const hasRemote = remoteStatus && !remoteStatus.includes('not configured')
+  if (hasRemote) {
+    const remoteLine = chalk.dim('  ' + remoteStatus)
+    const promptSuffix = lastRemotePrompt ? chalk.dim('  ·  Last prompt: ' + lastRemotePrompt) : ''
+    out.push(remoteLine + promptSuffix)
   }
 
   // Bottom bar — full-width accent separator
