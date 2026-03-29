@@ -661,8 +661,9 @@ describe('doctor-git', async () => {
         env: { ...process.env, GIT_COMMITTER_DATE: pastDate },
       });
 
-      // Create uncommitted changes
-      writeFileSync(join(dir, "dirty.txt"), "uncommitted work\n");
+      // Modify an already-tracked file (nativeAddTracked uses git add -u,
+      // which only stages tracked files — new untracked files are not staged)
+      writeFileSync(join(dir, "README.md"), "# test\nmodified content\n");
 
       const detect = await runGSDDoctor(dir);
       const staleIssues = detect.issues.filter(i => i.code === "stale_uncommitted_changes");
