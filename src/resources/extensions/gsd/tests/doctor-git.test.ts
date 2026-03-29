@@ -670,16 +670,16 @@ describe('doctor-git', async () => {
       assert.ok(staleIssues[0]?.message.includes("minute"), "message mentions minutes");
       assert.ok(staleIssues[0]?.fixable === true, "stale uncommitted changes is fixable");
 
-      // Fix should create a safety snapshot commit
+      // Fix should create a gsd snapshot commit
       const fixed = await runGSDDoctor(dir, { fix: true });
       assert.ok(
-        fixed.fixesApplied.some(f => f.includes("safety snapshot")),
-        "fix creates a safety snapshot commit",
+        fixed.fixesApplied.some(f => f.includes("gsd snapshot")),
+        "fix creates a gsd snapshot commit",
       );
 
-      // Verify the safety commit was created with the [gsd safety] tag
+      // Verify the snapshot commit was created with the gsd snapshot tag
       const log = run("git log -1 --oneline", dir);
-      assert.ok(log.includes("[gsd safety]"), "safety commit is tagged with [gsd safety]");
+      assert.ok(log.includes("gsd snapshot"), "commit is tagged with gsd snapshot");
     });
 
     // ─── Test: stale_uncommitted_changes NOT flagged when recent commit ──

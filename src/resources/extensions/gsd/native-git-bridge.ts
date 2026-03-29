@@ -681,6 +681,16 @@ export function nativeAddAll(basePath: string): void {
 }
 
 /**
+ * Stage only already-tracked files (git add -u).
+ * Does NOT add new untracked files — only updates modifications and deletions
+ * for files git already knows about. Safe for automated snapshots where
+ * pulling in unknown untracked files (secrets, binaries) would be dangerous.
+ */
+export function nativeAddTracked(basePath: string): void {
+  gitFileExec(basePath, ["add", "-u"]);
+}
+
+/**
  * Stage all files with pathspec exclusions (git add -A -- ':!pattern' ...).
  * Excluded paths are never hashed by git, preventing hangs on large
  * untracked artifact trees (57GB+, 11K+ files). See #1605.

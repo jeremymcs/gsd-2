@@ -10,7 +10,7 @@ import { deriveState, isMilestoneComplete } from "./state.js";
 import { listWorktrees, resolveGitDir, worktreesDir } from "./worktree-manager.js";
 import { abortAndReset } from "./git-self-heal.js";
 import { RUNTIME_EXCLUSION_PATHS, resolveMilestoneIntegrationBranch, writeIntegrationBranch } from "./git-service.js";
-import { nativeIsRepo, nativeWorktreeList, nativeWorktreeRemove, nativeBranchList, nativeBranchDelete, nativeLsFiles, nativeRmCached, nativeHasChanges, nativeLastCommitEpoch, nativeGetCurrentBranch, nativeAddAll, nativeCommit } from "./native-git-bridge.js";
+import { nativeIsRepo, nativeWorktreeList, nativeWorktreeRemove, nativeBranchList, nativeBranchDelete, nativeLsFiles, nativeRmCached, nativeHasChanges, nativeLastCommitEpoch, nativeGetCurrentBranch, nativeAddTracked, nativeCommit } from "./native-git-bridge.js";
 import { getAllWorktreeHealth } from "./worktree-health.js";
 import { loadEffectiveGSDPreferences } from "./preferences.js";
 
@@ -360,22 +360,22 @@ export async function checkGitHealth(
             code: "stale_uncommitted_changes",
             scope: "project",
             unitId: "project",
-            message: `Uncommitted changes detected with no commit in ${mins} minute${mins === 1 ? "" : "s"} (threshold: ${thresholdMinutes}m). Auto-committing safety snapshot.`,
+            message: `Uncommitted changes detected with no commit in ${mins} minute${mins === 1 ? "" : "s"} (threshold: ${thresholdMinutes}m). Snapshotting tracked files.`,
             fixable: true,
           });
 
           if (shouldFix("stale_uncommitted_changes")) {
             try {
-              nativeAddAll(basePath);
-              const commitMsg = `[gsd safety] auto-snapshot: uncommitted changes after ${mins}m inactivity`;
+              nativeAddTracked(basePath);
+              const commitMsg = `gsd snapshot: uncommitted changes after ${mins}m inactivity`;
               const result = nativeCommit(basePath, commitMsg);
               if (result) {
-                fixesApplied.push(`created safety snapshot commit after ${mins}m of uncommitted changes`);
+                fixesApplied.push(`created gsd snapshot after ${mins}m of uncommitted changes`);
               } else {
-                fixesApplied.push("stale commit snapshot skipped — nothing to commit after staging");
+                fixesApplied.push("gsd snapshot skipped — nothing to commit after staging tracked files");
               }
             } catch {
-              fixesApplied.push("failed to create safety snapshot commit");
+              fixesApplied.push("failed to create gsd snapshot commit");
             }
           }
         }

@@ -22,7 +22,7 @@ import { abortAndReset } from "./git-self-heal.js";
 import { rebuildState } from "./doctor.js";
 import { deriveState } from "./state.js";
 import { resolveMilestoneIntegrationBranch } from "./git-service.js";
-import { nativeIsRepo, nativeHasChanges, nativeLastCommitEpoch, nativeGetCurrentBranch, nativeAddAll, nativeCommit } from "./native-git-bridge.js";
+import { nativeIsRepo, nativeHasChanges, nativeLastCommitEpoch, nativeGetCurrentBranch, nativeAddTracked, nativeCommit } from "./native-git-bridge.js";
 import { loadEffectiveGSDPreferences } from "./preferences.js";
 import { runEnvironmentChecks } from "./doctor-environment.js";
 
@@ -312,15 +312,15 @@ export async function preDispatchHealthGate(basePath: string): Promise<PreDispat
         if (minutesSinceCommit >= thresholdMinutes) {
           const mins = Math.floor(minutesSinceCommit);
           try {
-            nativeAddAll(basePath);
-            const commitMsg = `[gsd safety] pre-dispatch snapshot: uncommitted changes after ${mins}m inactivity`;
+            nativeAddTracked(basePath);
+            const commitMsg = `gsd snapshot: pre-dispatch, uncommitted changes after ${mins}m inactivity`;
             const result = nativeCommit(basePath, commitMsg);
             if (result) {
-              fixesApplied.push(`pre-dispatch: created safety snapshot after ${mins}m of uncommitted changes`);
+              fixesApplied.push(`pre-dispatch: created gsd snapshot after ${mins}m of uncommitted changes`);
             }
           } catch {
             // Non-blocking — snapshot failed but dispatch can continue
-            fixesApplied.push("pre-dispatch: stale commit snapshot failed");
+            fixesApplied.push("pre-dispatch: gsd snapshot failed");
           }
         }
       }
