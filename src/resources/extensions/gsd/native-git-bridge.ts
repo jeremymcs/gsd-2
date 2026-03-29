@@ -942,6 +942,37 @@ export function nativeResetHard(basePath: string): void {
 }
 
 /**
+ * Soft reset to a target ref (git reset --soft <ref>).
+ * Moves HEAD to `target` while keeping all changes staged in the index.
+ * Used to squash snapshot commits back into a single real commit.
+ */
+export function nativeResetSoft(basePath: string, target: string): void {
+  execFileSync("git", ["reset", "--soft", target], {
+    cwd: basePath,
+    stdio: ["ignore", "pipe", "pipe"],
+    encoding: "utf-8",
+    env: GIT_NO_PROMPT_ENV,
+  });
+}
+
+/**
+ * Get the subject line of a commit (git log -1 --format=%s <ref>).
+ * Returns empty string if the ref doesn't exist.
+ */
+export function nativeCommitSubject(basePath: string, ref: string): string {
+  try {
+    return execFileSync("git", ["log", "-1", "--format=%s", ref], {
+      cwd: basePath,
+      stdio: ["ignore", "pipe", "pipe"],
+      encoding: "utf-8",
+      env: GIT_NO_PROMPT_ENV,
+    }).trim();
+  } catch {
+    return "";
+  }
+}
+
+/**
  * Delete a branch.
  * Native: libgit2 branch delete.
  * Fallback: `git branch -D/-d <branch>`.
