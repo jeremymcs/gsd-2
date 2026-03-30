@@ -29,6 +29,7 @@ import {
 } from "./paths.js";
 import { parseRoadmap } from "./parsers-legacy.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { logError } from "./workflow-logger.js";
 import { join } from "node:path";
 import { hasImplementationArtifacts } from "./auto-recovery.js";
 import {
@@ -575,7 +576,7 @@ export const DISPATCH_RULES: DispatchRule[] = [
         };
       } catch (err) {
         // Non-fatal — fall through to sequential execution
-        process.stderr.write(`gsd-reactive: graph derivation failed: ${(err as Error).message}\n`);
+        logError("dispatch", "reactive graph derivation failed", { error: (err as Error).message });
         return null;
       }
     },
