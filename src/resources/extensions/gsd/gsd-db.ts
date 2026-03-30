@@ -11,6 +11,7 @@ import { dirname } from "node:path";
 import type { Decision, Requirement, GateRow, GateId, GateScope, GateStatus, GateVerdict } from "./types.js";
 import { GSDError, GSD_STALE_STATE } from "./errors.js";
 import { logError } from "./workflow-logger.js";
+import { debugLog } from "./debug-logger.js";
 
 const _require = createRequire(import.meta.url);
 
@@ -789,11 +790,11 @@ export function openDatabase(path: string): boolean {
         initSchema(adapter, fileBacked);
         process.stderr.write("gsd-db: recovered corrupt database via VACUUM\n");
       } catch (retryErr) {
-        try { adapter.close(); } catch { /* swallow */ }
+        try { adapter.close(); } catch (closeErr) { debugLog("db-adapter-close-failed", { error: String(closeErr) }); }
         throw retryErr;
       }
     } else {
-      try { adapter.close(); } catch { /* swallow */ }
+      try { adapter.close(); } catch (closeErr) { debugLog("db-adapter-close-failed", { error: String(closeErr) }); }
       throw err;
     }
   }
@@ -804,7 +805,7 @@ export function openDatabase(path: string): boolean {
 
   if (!_exitHandlerRegistered) {
     _exitHandlerRegistered = true;
-    process.on("exit", () => { try { closeDatabase(); } catch {} });
+    process.on("exit", () => { try { closeDatabase(); } catch (err) { debugLog("db-exit-close-failed", { error: String(err) }); } });
   }
 
   return true;
@@ -814,16 +815,14 @@ export function closeDatabase(): void {
   if (currentDb) {
     try {
       currentDb.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-    } catch { /* non-fatal — best effort before close */ }
+    } catch (err) { debugLog("db-wal-checkpoint-failed", { error: String(err) }); }
     try {
       // Incremental vacuum to reclaim space without blocking
       currentDb.exec('PRAGMA incremental_vacuum(64)');
-    } catch { /* non-fatal */ }
+    } catch (err) { debugLog("db-incremental-vacuum-failed", { error: String(err) }); }
     try {
       currentDb.close();
-    } catch {
-      // swallow close errors
-    }
+    } catch (err) { debugLog("db-close-failed", { error: String(err) }); }
     currentDb = null;
     currentPath = null;
     currentPid = 0;
