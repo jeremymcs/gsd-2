@@ -72,14 +72,8 @@ describe("TUI contentCursorRow tracking (#3764)", () => {
     tui.addChild(component);
     (tui as any).doRender();
 
-    // After first render, hardwareCursorRow is at IME position (row 1),
-    // but contentCursorRow should be at finalCursorRow (row 2, end of content).
-    // Verify contentCursorRow is set correctly.
-    assert.strictEqual(
-      (tui as any).contentCursorRow,
-      2,
-      "contentCursorRow should be at content end (row 2) after first render",
-    );
+    // After first render, hardwareCursorRow is at IME position (row 1)
+    // because positionHardwareCursor moved it to the CURSOR_MARKER line.
     assert.strictEqual(
       (tui as any).hardwareCursorRow,
       1,
@@ -112,7 +106,7 @@ describe("TUI contentCursorRow tracking (#3764)", () => {
     );
   });
 
-  it("contentCursorRow persists correctly across renders with shrinking content", () => {
+  it("hardwareCursorRow tracks actual terminal position through IME and shrink", () => {
     const terminal = new MockTTYTerminal();
     const tui = new TUI(terminal, false);
     const component = new DynamicLinesComponent([
@@ -126,10 +120,11 @@ describe("TUI contentCursorRow tracking (#3764)", () => {
     tui.addChild(component);
     (tui as any).doRender();
 
+    // After IME positioning, hardwareCursorRow is at CURSOR_MARKER line (row 1)
     assert.strictEqual(
-      (tui as any).contentCursorRow,
-      4,
-      "contentCursorRow should be 4 after rendering 5 lines",
+      (tui as any).hardwareCursorRow,
+      1,
+      "hardwareCursorRow should be at IME position (row 1) after first render",
     );
 
     // Shrink content
@@ -142,10 +137,11 @@ describe("TUI contentCursorRow tracking (#3764)", () => {
 
     (tui as any).doRender();
 
+    // After shrink, hardwareCursorRow should be at IME position again
     assert.strictEqual(
-      (tui as any).contentCursorRow,
-      2,
-      "contentCursorRow should update to 2 after shrinking to 3 lines",
+      (tui as any).hardwareCursorRow,
+      1,
+      "hardwareCursorRow should be at IME position after shrink render",
     );
   });
 });

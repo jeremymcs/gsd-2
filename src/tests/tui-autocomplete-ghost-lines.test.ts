@@ -77,9 +77,12 @@ describe("TUI autocomplete shrink clearing (#3721)", () => {
     (tui as any).doRender();
 
     assert.ok(terminal.writtenData.length >= 1, "shrink render should write a differential buffer");
+    // After IME positioning, cursor is at row 1 (CURSOR_MARKER line).
+    // To clear deleted rows 4-5, cursor must move DOWN to content bottom (row 3),
+    // then clear the extra lines below. Movement is relative to actual cursor position.
     assert.ok(
-      terminal.writtenData[0].startsWith("\x1b[?2026h\x1b[2A\r"),
-      `expected shrink diff to move up from prior content bottom, got ${JSON.stringify(terminal.writtenData[0])}`,
+      terminal.writtenData[0].startsWith("\x1b[?2026h\x1b[2B\r"),
+      `expected shrink diff to move down from IME cursor to content bottom, got ${JSON.stringify(terminal.writtenData[0])}`,
     );
   });
 });

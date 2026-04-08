@@ -239,7 +239,6 @@ export class TUI extends Container {
 	public onDebug?: () => void;
 	private renderRequested = false;
 	private cursorRow = 0; // Logical cursor row (end of rendered content)
-	private contentCursorRow = 0; // Cursor row after content rendering, before IME repositioning
 	private hardwareCursorRow = 0; // Actual terminal cursor row (may differ due to IME positioning)
 	private inputBuffer = ""; // Buffer for parsing terminal responses
 	private cellSizeQueryPending = false;
@@ -499,7 +498,6 @@ export class TUI extends Container {
 			this.previousWidth = -1; // -1 triggers widthChanged, forcing a full clear
 			this.previousHeight = -1; // -1 triggers heightChanged, forcing a full clear
 			this.cursorRow = 0;
-			this.contentCursorRow = 0;
 			this.hardwareCursorRow = 0;
 			this.maxLinesRendered = 0;
 			this.previousViewportTop = 0;
@@ -618,7 +616,7 @@ export class TUI extends Container {
 		const height = this.terminal.rows;
 		let viewportTop = Math.max(0, this.maxLinesRendered - height);
 		let prevViewportTop = this.previousViewportTop;
-		let hardwareCursorRow = this.contentCursorRow;
+		let hardwareCursorRow = this.hardwareCursorRow;
 		const computeLineDiff = (targetRow: number): number => {
 			const currentScreenRow = hardwareCursorRow - prevViewportTop;
 			const targetScreenRow = targetRow - viewportTop;
@@ -665,7 +663,6 @@ export class TUI extends Container {
 			buffer += "\x1b[?2026l"; // End synchronized output
 			this.terminal.write(buffer);
 			this.cursorRow = Math.max(0, newLines.length - 1);
-			this.contentCursorRow = this.cursorRow;
 			this.hardwareCursorRow = this.cursorRow;
 			// Reset max lines when clearing, otherwise track growth
 			if (clear) {
@@ -773,7 +770,6 @@ export class TUI extends Container {
 				buffer += "\x1b[?2026l";
 				this.terminal.write(buffer);
 				this.cursorRow = targetRow;
-				this.contentCursorRow = targetRow;
 				this.hardwareCursorRow = targetRow;
 			}
 			this.positionHardwareCursor(cursorPos, newLines.length);
@@ -891,10 +887,8 @@ export class TUI extends Container {
 
 		// Track cursor position for next render
 		// cursorRow tracks end of content (for viewport calculation)
-		// contentCursorRow tracks cursor after content rendering (before IME repositioning)
-		// hardwareCursorRow tracks actual terminal cursor position (may differ due to IME)
+		// hardwareCursorRow tracks actual terminal cursor position (for movement)
 		this.cursorRow = Math.max(0, newLines.length - 1);
-		this.contentCursorRow = finalCursorRow;
 		this.hardwareCursorRow = finalCursorRow;
 		// Track terminal's working area (grows but doesn't shrink unless cleared)
 		this.maxLinesRendered = Math.max(this.maxLinesRendered, newLines.length);
