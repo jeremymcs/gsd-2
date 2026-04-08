@@ -116,7 +116,7 @@ export class RetryHandler {
 		// generated error from getApiKey() when credentials are in a backoff window.
 		// Re-entering the retry handler for that message creates a cascade of empty
 		// error entries in the session file, breaking resume (#3429).
-		return /overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server.?error|internal.?error|connection.?error|connection.?refused|other side closed|fetch failed|upstream.?connect|reset before headers|terminated|retry delay|network.?(?:is\s+)?unavailable|credentials.*expired|extra usage is required|out of extra usage|third.party.*draw from extra|third.party.*not.*available/i.test(
+		return /overloaded|rate.?limit|too many requests|429|500|502|503|504|service.?unavailable|server.?error|internal.?error|connection.?error|connection.?refused|other side closed|fetch failed|upstream.?connect|reset before headers|terminated|retry delay|network.?(?:is\s+)?unavailable|credentials.*expired|extra usage is required|third.party.*draw from extra|third.party.*not.*available/i.test(
 			err,
 		);
 	}
@@ -228,10 +228,6 @@ export class RetryHandler {
 					// Try long-context model downgrade ([1m] → base) before giving up
 					const downgraded = this._tryLongContextDowngrade(message, retryGeneration);
 					if (downgraded) return true;
-
-					// Quota exhausted on Anthropic API — try claude-code CLI as last resort
-					const switched = this._tryClaudeCodeFallback(message, retryGeneration);
-					if (switched) return true;
 
 					this._deps.emit({
 						type: "fallback_chain_exhausted",
@@ -412,7 +408,7 @@ export class RetryHandler {
 		const err = errorMessage.toLowerCase();
 		// Long-context entitlement errors are billing gates, not transient rate limits.
 		// Must be checked before the generic 429/rate_limit regex.
-		if (/extra usage is required|out of extra usage|long context required/i.test(err)) return "quota_exhausted";
+		if (/extra usage is required|long context required/i.test(err)) return "quota_exhausted";
 		if (/quota|billing|exceeded.*limit|usage.*limit/i.test(err)) return "quota_exhausted";
 		if (/rate.?limit|too many requests|429/i.test(err)) return "rate_limit";
 		if (/500|502|503|504|server.?error|internal.?error|service.?unavailable/i.test(err)) return "server_error";

@@ -340,38 +340,14 @@ describe("RetryHandler — long-context entitlement 429 (#2803)", () => {
 		});
 	});
 
-	describe("quota exhaustion claude-code fallback", () => {
-		it("recognizes 'out of extra usage' as retryable", () => {
+	describe("'out of extra usage' is not retryable", () => {
+		it("does NOT treat 'out of extra usage' as retryable (hard billing gate)", () => {
 			const { deps } = createMockDeps();
 			const handler = new RetryHandler(deps);
 			const msg = errorMessage(
 				'400 {"type":"error","error":{"type":"invalid_request_error","message":"You\'re out of extra usage. Add more at claude.ai/settings/usage and keep going."}}',
 			);
-			assert.equal(handler.isRetryableError(msg), true);
-		});
-
-		it("falls back to claude-code when anthropic quota is exhausted", async () => {
-			const ccModel = createMockModel("claude-code", "claude-opus-4-6");
-			const { deps, emittedEvents } = createMockDeps({
-				model: createMockModel("anthropic", "claude-opus-4-6"),
-				markUsageLimitReachedResult: false,
-				fallbackResult: null,
-				findModelResult: (provider: string, modelId: string) => {
-					if (provider === "claude-code" && modelId === "claude-opus-4-6") return ccModel;
-					return undefined;
-				},
-			});
-			deps.isClaudeCodeReady = () => true;
-
-			const handler = new RetryHandler(deps);
-			const msg = errorMessage("You're out of extra usage. Add more at claude.ai/settings/usage and keep going.");
-
-			const result = await handler.handleRetryableError(msg);
-
-			assert.equal(result, true, "should retry via claude-code fallback");
-			const switchEvent = emittedEvents.find((e) => e.type === "fallback_provider_switch");
-			assert.ok(switchEvent, "Expected fallback_provider_switch event");
-			assert.ok(switchEvent!.to.startsWith("claude-code/"), "Should switch to claude-code provider");
+			assert.equal(handler.isRetryableError(msg), false);
 		});
 	});
 
