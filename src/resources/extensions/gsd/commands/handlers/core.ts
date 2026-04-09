@@ -194,56 +194,6 @@ function sortModelsForSelection(models: Model<any>[], currentModel: Model<any> |
   });
 }
 
-function buildProviderModelGroups(
-  models: Model<any>[],
-  currentModel: Model<any> | undefined,
-): Map<string, Model<any>[]> {
-  const byProvider = new Map<string, Model<any>[]>();
-
-  for (const model of sortModelsForSelection(models, currentModel)) {
-    let group = byProvider.get(model.provider);
-    if (!group) {
-      group = [];
-      byProvider.set(model.provider, group);
-    }
-    group.push(model);
-  }
-  return byProvider;
-}
-
-async function selectModelByProvider(
-  title: string,
-  models: Model<any>[],
-  ctx: ExtensionCommandContext,
-  currentModel: Model<any> | undefined,
-): Promise<Model<any> | undefined> {
-  const byProvider = buildProviderModelGroups(models, currentModel);
-  const providerOptions = Array.from(byProvider.entries()).map(([provider, group]) =>
-    `${provider} (${group.length} model${group.length === 1 ? "" : "s"})`,
-  );
-  providerOptions.push("(cancel)");
-
-  const providerChoice = await ctx.ui.select(`${title} — choose provider:`, providerOptions);
-  if (!providerChoice || typeof providerChoice !== "string" || providerChoice === "(cancel)") return undefined;
-
-  const providerName = providerChoice.replace(/ \(\d+ models?\)$/, "");
-  const providerModels = byProvider.get(providerName);
-  if (!providerModels || providerModels.length === 0) return undefined;
-
-  const optionToModel = new Map<string, Model<any>>();
-  const modelOptions = providerModels.map((model) => {
-    const isCurrent = currentModel && model.provider === currentModel.provider && model.id === currentModel.id;
-    const label = `${isCurrent ? "* " : ""}${model.id}`;
-    optionToModel.set(label, model);
-    return label;
-  });
-  modelOptions.push("(cancel)");
-
-  const modelChoice = await ctx.ui.select(`${title} — ${providerName}:`, modelOptions);
-  if (!modelChoice || typeof modelChoice !== "string" || modelChoice === "(cancel)") return undefined;
-  return optionToModel.get(modelChoice);
-}
-
 async function resolveRequestedModel(
   query: string,
   ctx: ExtensionCommandContext,
@@ -261,7 +211,19 @@ async function resolveRequestedModel(
 
   if (partialMatches.length === 1) return partialMatches[0];
   if (partialMatches.length === 0 || !ctx.hasUI) return undefined;
-  return selectModelByProvider(`Multiple models match "${query}"`, partialMatches, ctx, ctx.model);
+
+  const sorted = sortModelsForSelection(partialMatches, ctx.model);
+  const optionToModel = new Map<string, Model<any>>();
+  const options = sorted.map((model) => {
+    const label = `${model.provider}/${model.id}`;
+    optionToModel.set(label, model);
+    return label;
+  });
+  options.push("(cancel)");
+
+  const choice = await ctx.ui.select(`Multiple models match "${query}" — choose one:`, options);
+  if (!choice || typeof choice !== "string" || choice === "(cancel)") return undefined;
+  return optionToModel.get(choice);
 }
 
 async function handleModel(trimmedArgs: string, ctx: ExtensionCommandContext, pi: ExtensionAPI | undefined): Promise<void> {
@@ -285,7 +247,18 @@ async function handleModel(trimmedArgs: string, ctx: ExtensionCommandContext, pi
       return;
     }
 
-    targetModel = await selectModelByProvider("Select session model:", availableModels, ctx, ctx.model);
+    const optionToModel = new Map<string, Model<any>>();
+    const options = sortModelsForSelection(availableModels, ctx.model).map((model) => {
+      const isCurrent = ctx.model && model.provider === ctx.model.provider && model.id === ctx.model.id;
+      const label = `${isCurrent ? "* " : ""}${model.provider}/${model.id}`;
+      optionToModel.set(label, model);
+      return label;
+    });
+    options.push("(cancel)");
+
+    const choice = await ctx.ui.select("Select session model:", options);
+    if (!choice || typeof choice !== "string" || choice === "(cancel)") return;
+    targetModel = optionToModel.get(choice);
   } else {
     targetModel = await resolveRequestedModel(trimmed, ctx);
   }
