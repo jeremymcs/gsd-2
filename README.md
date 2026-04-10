@@ -21,7 +21,7 @@ One command. Walk away. Come back to a built project with clean git history.
 
 > GSD now provisions a managed [RTK](https://github.com/rtk-ai/rtk) binary on supported macOS, Linux, and Windows installs to compress shell-command output in `bash`, `async_bash`, `bg_shell`, and verification flows. GSD forces `RTK_TELEMETRY_DISABLED=1` for all managed invocations. Set `GSD_RTK_DISABLED=1` to disable the integration.
 
-> **📋 NOTICE: New to Node on Mac?** If you installed Node.js via Homebrew, you may be running a development release instead of LTS. **[Read this guide](./docs/node-lts-macos.md)** to pin Node 24 LTS and avoid compatibility issues.
+> **📋 NOTICE: New to Node on Mac?** If you installed Node.js via Homebrew, you may be running a development release instead of LTS. **[Read this guide](./docs/user-docs/node-lts-macos.md)** to pin Node 24 LTS and avoid compatibility issues.
 
 </div>
 
@@ -97,28 +97,33 @@ See the full [Changelog](./CHANGELOG.md) for details on every release.
 
 Full documentation is available at **[gsd.build](https://gsd.build)** (powered by Mintlify) and in the [`docs/`](./docs/) directory:
 
-- **[Getting Started](./docs/getting-started.md)** — install, first run, basic usage
-- **[Auto Mode](./docs/auto-mode.md)** — autonomous execution deep-dive
-- **[Configuration](./docs/configuration.md)** — all preferences, models, git, and hooks
-- **[Custom Models](./docs/custom-models.md)** — add custom providers (Ollama, vLLM, LM Studio, proxies)
-- **[Token Optimization](./docs/token-optimization.md)** — profiles, context compression, complexity routing
-- **[Cost Management](./docs/cost-management.md)** — budgets, tracking, projections
-- **[Git Strategy](./docs/git-strategy.md)** — worktree isolation, branching, merge behavior
-- **[Parallel Orchestration](./docs/parallel-orchestration.md)** — run multiple milestones simultaneously
-- **[Working in Teams](./docs/working-in-teams.md)** — unique IDs, shared artifacts
-- **[Skills](./docs/skills.md)** — bundled skills, discovery, custom authoring
-- **[Commands Reference](./docs/commands.md)** — all commands and keyboard shortcuts
-- **[Architecture](./docs/architecture.md)** — system design and dispatch pipeline
-- **[Troubleshooting](./docs/troubleshooting.md)** — common issues, doctor, forensics, recovery
-- **[CI/CD Pipeline](./docs/ci-cd-pipeline.md)** — three-stage promotion pipeline (Dev → Test → Prod)
-- **[VS Code Extension](./vscode-extension/README.md)** — chat participant, sidebar dashboard, RPC integration
-- **[Visualizer](./docs/visualizer.md)** — workflow visualizer with stats and discussion status
-- **[Remote Questions](./docs/remote-questions.md)** — route decisions to Slack or Discord when human input is needed
-- **[Dynamic Model Routing](./docs/dynamic-model-routing.md)** — complexity-based model selection and budget pressure
-- **[Web Interface](./docs/web-interface.md)** — browser-based project management and real-time progress
-- **[Pipeline Simplification (ADR-003)](./docs/ADR-003-pipeline-simplification.md)** — merged research into planning, mechanical completion
+### User Guides
+
+- **[Getting Started](./docs/user-docs/getting-started.md)** — install, first run, basic usage
+- **[Auto Mode](./docs/user-docs/auto-mode.md)** — autonomous execution deep-dive
+- **[Configuration](./docs/user-docs/configuration.md)** — all preferences, models, git, and hooks
+- **[Custom Models](./docs/user-docs/custom-models.md)** — add custom providers (Ollama, vLLM, LM Studio, proxies)
+- **[Token Optimization](./docs/user-docs/token-optimization.md)** — profiles, context compression, complexity routing
+- **[Cost Management](./docs/user-docs/cost-management.md)** — budgets, tracking, projections
+- **[Git Strategy](./docs/user-docs/git-strategy.md)** — worktree isolation, branching, merge behavior
+- **[Parallel Orchestration](./docs/user-docs/parallel-orchestration.md)** — run multiple milestones simultaneously
+- **[Working in Teams](./docs/user-docs/working-in-teams.md)** — unique IDs, shared artifacts
+- **[Skills](./docs/user-docs/skills.md)** — bundled skills, discovery, custom authoring
+- **[Commands Reference](./docs/user-docs/commands.md)** — all commands and keyboard shortcuts
+- **[Troubleshooting](./docs/user-docs/troubleshooting.md)** — common issues, doctor, forensics, recovery
+- **[Visualizer](./docs/user-docs/visualizer.md)** — workflow visualizer with stats and discussion status
+- **[Remote Questions](./docs/user-docs/remote-questions.md)** — route decisions to Slack or Discord when human input is needed
+- **[Dynamic Model Routing](./docs/user-docs/dynamic-model-routing.md)** — complexity-based model selection and budget pressure
+- **[Web Interface](./docs/user-docs/web-interface.md)** — browser-based project management and real-time progress
+- **[Migration from v1](./docs/user-docs/migration.md)** — `.planning` → `.gsd` migration
 - **[Docker Sandbox](./docker/README.md)** — run GSD auto mode in an isolated Docker container
-- **[Migration from v1](./docs/migration.md)** — `.planning` → `.gsd` migration
+
+### Developer Docs
+
+- **[Architecture](./docs/dev/architecture.md)** — system design and dispatch pipeline
+- **[CI/CD Pipeline](./docs/dev/ci-cd-pipeline.md)** — three-stage promotion pipeline (Dev → Test → Prod)
+- **[Pipeline Simplification (ADR-003)](./docs/dev/ADR-003-pipeline-simplification.md)** — merged research into planning, mechanical completion
+- **[VS Code Extension](./vscode-extension/README.md)** — chat participant, sidebar dashboard, RPC integration
 
 ---
 
@@ -539,7 +544,7 @@ token_profile: budget      # or balanced (default), quality
 
 **Budget pressure** graduates model downgrading as you approach your budget ceiling — 50%, 75%, and 90% thresholds progressively shift work to cheaper tiers.
 
-See the full [Token Optimization Guide](./docs/token-optimization.md) for details.
+See the full [Token Optimization Guide](./docs/user-docs/token-optimization.md) for details.
 
 ### Bundled Tools
 
