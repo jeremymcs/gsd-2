@@ -291,15 +291,15 @@ export function extractToolResultsFromSdkUserMessage(message: SDKUserMessage): A
 	return extracted;
 }
 
-function attachExternalResultsToToolCalls(
-	toolCalls: AssistantMessage["content"],
+function attachExternalResultsToToolBlocks(
+	toolBlocks: AssistantMessage["content"],
 	toolResultsById: ReadonlyMap<string, ExternalToolResultPayload>,
 ): void {
-	for (const block of toolCalls) {
-		if (block.type !== "toolCall") continue;
+	for (const block of toolBlocks) {
+		if (block.type !== "toolCall" && block.type !== "serverToolUse") continue;
 		const externalResult = toolResultsById.get(block.id);
 		if (!externalResult) continue;
-		(block as ToolCallWithExternalResult).externalResult = externalResult;
+		(block as ToolCallWithExternalResult & { id: string }).externalResult = externalResult;
 	}
 }
 
@@ -337,8 +337,8 @@ async function pumpSdkMessages(
 	/** Track the last text content seen across all assistant turns for the final message. */
 	let lastTextContent = "";
 	let lastThinkingContent = "";
-	/** Collect tool calls from intermediate SDK turns for tool_execution events. */
-	const intermediateToolCalls: AssistantMessage["content"] = [];
+	/** Collect tool blocks from intermediate SDK turns for tool execution rendering. */
+	const intermediateToolBlocks: AssistantMessage["content"] = [];
 	/** Preserve real external tool results from Claude Code's synthetic user messages. */
 	const toolResultsById = new Map<string, ExternalToolResultPayload>();
 
@@ -439,9 +439,9 @@ async function pumpSdkMessages(
 								lastTextContent = block.text;
 							} else if (block.type === "thinking" && block.thinking) {
 								lastThinkingContent = block.thinking;
-							} else if (block.type === "toolCall") {
-								// Collect tool calls for externalToolExecution rendering
-								intermediateToolCalls.push(block);
+							} else if (block.type === "toolCall" || block.type === "serverToolUse") {
+								// Collect tool blocks for externalToolExecution rendering
+								intermediateToolBlocks.push(block);
 							}
 						}
 					}
@@ -451,24 +451,33 @@ async function pumpSdkMessages(
 					for (const { toolUseId, result } of extractToolResultsFromSdkUserMessage(msg as SDKUserMessage)) {
 						toolResultsById.set(toolUseId, result);
 					}
-					attachExternalResultsToToolCalls(intermediateToolCalls, toolResultsById);
+					attachExternalResultsToToolBlocks(intermediateToolBlocks, toolResultsById);
 
 					// Push a synthetic toolcall_end for each tool call from this turn
 					// so the TUI can render tool results in real-time during the SDK
 					// session instead of waiting until the entire session completes.
 					if (builder) {
 						for (const block of builder.message.content) {
-							if (block.type !== "toolCall") continue;
 							const extResult = (block as ToolCallWithExternalResult).externalResult;
 							if (!extResult) continue;
-							// Push a toolcall_end with result attached so the chat-controller
-							// can call updateResult on the pending ToolExecutionComponent.
-							stream.push({
-								type: "toolcall_end",
-								contentIndex: builder.message.content.indexOf(block),
-								toolCall: block,
-								partial: builder.message,
-							});
+							const contentIndex = builder.message.content.indexOf(block);
+							if (contentIndex < 0) continue;
+							// Push synthetic completion events with result attached so the
+							// chat-controller can update pending ToolExecutionComponents.
+							if (block.type === "toolCall") {
+								stream.push({
+									type: "toolcall_end",
+									contentIndex,
+									toolCall: block,
+									partial: builder.message,
+								});
+							} else if (block.type === "serverToolUse") {
+								stream.push({
+									type: "server_tool_use",
+									contentIndex,
+									partial: builder.message,
+								});
+							}
 						}
 					}
 
@@ -486,8 +495,8 @@ async function pumpSdkMessages(
 					const finalContent: AssistantMessage["content"] = [];
 
 					// Add tool calls from intermediate turns first (renders above text)
-					attachExternalResultsToToolCalls(intermediateToolCalls, toolResultsById);
-					finalContent.push(...intermediateToolCalls);
+					attachExternalResultsToToolBlocks(intermediateToolBlocks, toolResultsById);
+					finalContent.push(...intermediateToolBlocks);
 
 					// Add text/thinking from the last turn
 					if (builder && builder.message.content.length > 0) {
