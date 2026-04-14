@@ -187,6 +187,83 @@ describe('derive-state-helpers', () => {
     }
   });
 
+  // ─── resolveSliceDependencies: strict gating is the default ─────────
+  // When every incomplete slice has unmet deps (e.g. stale or circular dep
+  // metadata), state must resolve to `blocked` with explicit unmet-dep
+  // blockers instead of silently advancing to a slice whose deps are unmet.
+  test('resolveSliceDependencies: unmet deps return blocked phase with unmet-dep blockers', async () => {
+    const base = createFixtureBase();
+    const origFallback = process.env.GSD_ALLOW_STALE_DEP_FALLBACK;
+    try {
+      writeFile(base, 'milestones/M001/M001-ROADMAP.md', ROADMAP_CONTENT);
+
+      openDatabase(':memory:');
+      insertMilestone({ id: 'M001', title: 'Test', status: 'active' });
+      // Both slices have unmet deps — S01 depends on a non-existent S99,
+      // S02 depends on S01 which is still pending.
+      insertSlice({ id: 'S01', milestoneId: 'M001', title: 'First', status: 'pending', risk: 'low', depends: ['S99'] });
+      insertSlice({ id: 'S02', milestoneId: 'M001', title: 'Second', status: 'pending', risk: 'low', depends: ['S01'] });
+
+      delete process.env.GSD_ALLOW_STALE_DEP_FALLBACK;
+
+      invalidateStateCache();
+      const state = await deriveStateFromDb(base);
+
+      assert.equal(state.phase, 'blocked', 'strict-deps: phase is blocked when no slice has all deps met');
+      assert.equal(state.activeSlice, null, 'strict-deps: no active slice returned');
+      assert.ok(
+        state.blockers.some(b => b.includes('S01') && b.includes('S99')),
+        `strict-deps: S01's unmet dep S99 is surfaced as a blocker (got: ${JSON.stringify(state.blockers)})`,
+      );
+      assert.ok(
+        state.blockers.some(b => b.includes('S02') && b.includes('S01')),
+        `strict-deps: S02's unmet dep S01 is surfaced as a blocker (got: ${JSON.stringify(state.blockers)})`,
+      );
+    } finally {
+      if (origFallback !== undefined) process.env.GSD_ALLOW_STALE_DEP_FALLBACK = origFallback;
+      else delete process.env.GSD_ALLOW_STALE_DEP_FALLBACK;
+      closeDatabase();
+      cleanup(base);
+    }
+  });
+
+  // ─── resolveSliceDependencies: opt-in stale-dep fallback ────────────
+  // GSD_ALLOW_STALE_DEP_FALLBACK=1 restores the recovery path for cases
+  // where dependency metadata is stale (reassessment, cross-milestone refs).
+  // It should select the slice with the most satisfied deps instead of
+  // returning null.
+  test('resolveSliceDependencies: GSD_ALLOW_STALE_DEP_FALLBACK=1 selects best candidate', async () => {
+    const base = createFixtureBase();
+    const origFallback = process.env.GSD_ALLOW_STALE_DEP_FALLBACK;
+    try {
+      writeFile(base, 'milestones/M001/M001-ROADMAP.md', ROADMAP_CONTENT);
+      writeFile(base, 'milestones/M001/slices/S01/S01-PLAN.md', PLAN_CONTENT);
+      writeFile(base, 'milestones/M001/slices/S01/tasks/.gitkeep', '');
+      writeFile(base, 'milestones/M001/slices/S01/tasks/T01-PLAN.md', '# T01 Plan');
+
+      openDatabase(':memory:');
+      insertMilestone({ id: 'M001', title: 'Test', status: 'active' });
+      // S01 references a non-existent S99. Opt-in fallback should still
+      // pick S01 so the worker can make progress on stale metadata.
+      insertSlice({ id: 'S01', milestoneId: 'M001', title: 'First', status: 'pending', risk: 'low', depends: ['S99'] });
+      insertSlice({ id: 'S02', milestoneId: 'M001', title: 'Second', status: 'pending', risk: 'low', depends: ['S01'] });
+      insertTask({ id: 'T01', sliceId: 'S01', milestoneId: 'M001', title: 'First Task', status: 'pending' });
+
+      process.env.GSD_ALLOW_STALE_DEP_FALLBACK = '1';
+
+      invalidateStateCache();
+      const state = await deriveStateFromDb(base);
+
+      assert.notEqual(state.phase, 'blocked', 'opt-in-fallback: phase is not blocked when env var is set');
+      assert.equal(state.activeSlice?.id, 'S01', 'opt-in-fallback: fallback selects S01 (0/1 deps met, ties to first)');
+    } finally {
+      if (origFallback !== undefined) process.env.GSD_ALLOW_STALE_DEP_FALLBACK = origFallback;
+      else delete process.env.GSD_ALLOW_STALE_DEP_FALLBACK;
+      closeDatabase();
+      cleanup(base);
+    }
+  });
+
   // ─── reconcileSliceTasks: plan file imports tasks when DB empty ──────
   test('reconcileSliceTasks: imports tasks from plan file when DB has zero tasks (#3600)', async () => {
     const base = createFixtureBase();

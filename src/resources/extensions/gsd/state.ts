@@ -624,7 +624,13 @@ async function handleAllSlicesDone(
   };
 }
 
-function resolveSliceDependencies(activeMilestoneSlices: SliceRow[]): { activeSlice: ActiveRef | null, activeSliceRow: SliceRow | null } {
+type SliceDepResolution = {
+  activeSlice: ActiveRef | null;
+  activeSliceRow: SliceRow | null;
+  blockers?: string[];
+};
+
+function resolveSliceDependencies(activeMilestoneSlices: SliceRow[]): SliceDepResolution {
   const doneSliceIds = new Set(
     activeMilestoneSlices.filter(s => isStatusDone(s.status)).map(s => s.id)
   );
@@ -640,9 +646,12 @@ function resolveSliceDependencies(activeMilestoneSlices: SliceRow[]): { activeSl
     }
   }
 
-  // First pass: find a slice with ALL dependencies satisfied (strict)
+  // Strict: find a slice with ALL declared dependencies satisfied.
+  // Track a runner-up only when the opt-in stale-dep fallback is enabled.
+  const allowStaleDepFallback = process.env.GSD_ALLOW_STALE_DEP_FALLBACK === "1";
   let bestFallback: SliceRow | null = null;
   let bestFallbackSatisfied = -1;
+  const unmetByActiveSlice = new Map<string, string[]>();
 
   for (const s of activeMilestoneSlices) {
     if (isStatusDone(s.status)) continue;
@@ -650,30 +659,38 @@ function resolveSliceDependencies(activeMilestoneSlices: SliceRow[]): { activeSl
     if (s.depends.every(dep => doneSliceIds.has(dep))) {
       return { activeSlice: { id: s.id, title: s.title }, activeSliceRow: s };
     }
-    // Track the slice with the most satisfied dependencies as fallback
-    const satisfied = s.depends.filter(dep => doneSliceIds.has(dep)).length;
-    if (satisfied > bestFallbackSatisfied || (satisfied === bestFallbackSatisfied && !bestFallback)) {
-      bestFallback = s;
-      bestFallbackSatisfied = satisfied;
+    const unmet = s.depends.filter(dep => !doneSliceIds.has(dep));
+    unmetByActiveSlice.set(s.id, unmet);
+    if (allowStaleDepFallback) {
+      const satisfied = s.depends.length - unmet.length;
+      if (satisfied > bestFallbackSatisfied || (satisfied === bestFallbackSatisfied && !bestFallback)) {
+        bestFallback = s;
+        bestFallbackSatisfied = satisfied;
+      }
     }
   }
 
-  // Fallback: if no slice has all deps met but there ARE incomplete non-deferred
-  // slices, pick the one with the most deps satisfied. This prevents hard-blocking
-  // when dependency metadata is stale (e.g. after reassessment added/removed slices)
-  // or when deps reference slices from previous milestones.
-  if (bestFallback) {
+  // Opt-in recovery path: GSD_ALLOW_STALE_DEP_FALLBACK=1 picks the slice with
+  // the most satisfied deps so workers can make progress when dependency
+  // metadata is stale (e.g. after reassessment added/removed slices, or deps
+  // referencing slices from a previous milestone). Off by default — strict
+  // blocking is the correct invariant and unmet deps must surface as blockers.
+  if (allowStaleDepFallback && bestFallback) {
     const unmet = bestFallback.depends.filter(dep => !doneSliceIds.has(dep));
     logWarning("state",
-      `No slice has all deps satisfied — falling back to ${bestFallback.id} ` +
-      `(${bestFallbackSatisfied}/${bestFallback.depends.length} deps met, ` +
-      `unmet: ${unmet.join(", ")})`,
+      `GSD_ALLOW_STALE_DEP_FALLBACK=1 — selecting ${bestFallback.id} with unmet deps ` +
+      `(${bestFallbackSatisfied}/${bestFallback.depends.length} met, unmet: ${unmet.join(", ")})`,
       { mid: activeMilestoneSlices[0]?.milestone_id, sid: bestFallback.id },
     );
     return { activeSlice: { id: bestFallback.id, title: bestFallback.title }, activeSliceRow: bestFallback };
   }
 
-  return { activeSlice: null, activeSliceRow: null };
+  const blockers: string[] = [];
+  for (const [sid, unmet] of unmetByActiveSlice) {
+    if (unmet.length === 0) continue;
+    blockers.push(`Slice ${sid} blocked on unmet deps: ${unmet.join(", ")}`);
+  }
+  return { activeSlice: null, activeSliceRow: null, blockers };
 }
 
 async function reconcileSliceTasks(
@@ -854,9 +871,12 @@ export async function deriveStateFromDb(basePath: string): Promise<GSDState> {
         progress: { milestones: milestoneProgress, slices: sliceProgress },
       };
     }
+    const depBlockers = activeSliceContext.blockers && activeSliceContext.blockers.length > 0
+      ? activeSliceContext.blockers
+      : ['No slice eligible — check dependency ordering'];
     return {
       activeMilestone, activeSlice: null, activeTask: null,
-      phase: 'blocked', recentDecisions: [], blockers: ['No slice eligible — check dependency ordering'],
+      phase: 'blocked', recentDecisions: [], blockers: depBlockers,
       nextAction: 'Resolve dependency blockers or plan next slice.',
       registry, requirements,
       progress: { milestones: milestoneProgress, slices: sliceProgress },

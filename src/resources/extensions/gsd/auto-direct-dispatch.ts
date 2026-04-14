@@ -33,6 +33,7 @@ import {
   getWorkflowTransportSupportError,
   getRequiredWorkflowToolsForAutoUnit,
 } from "./workflow-mcp.js";
+import { getPriorSliceCompletionBlocker } from "./dispatch-guard.js";
 
 export async function dispatchDirectPhase(
   ctx: ExtensionCommandContext,
@@ -245,6 +246,22 @@ export async function dispatchDirectPhase(
         "warning",
       );
       return;
+  }
+
+  // Enforce the same dependency gate that auto dispatch uses. Without this,
+  // direct phase dispatch (/gsd <phase>) can skip ahead of unmet slice
+  // dependencies when state.ts resolves via GSD_ALLOW_STALE_DEP_FALLBACK or
+  // when a user manually targets an out-of-order slice. The second argument
+  // is unused by the guard so we pass a static placeholder.
+  const priorSliceBlocker = getPriorSliceCompletionBlocker(
+    base,
+    "main",
+    unitType,
+    unitId,
+  );
+  if (priorSliceBlocker) {
+    ctx.ui.notify(priorSliceBlocker, "warning");
+    return;
   }
 
   const compatibilityError = getWorkflowTransportSupportError(
