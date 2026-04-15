@@ -1,7 +1,8 @@
 import test, { mock } from "node:test";
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import {
   resolveAgentEnd,
@@ -538,12 +539,17 @@ function makeMockDeps(
  * runUnit mock (dispatch counters, milestone state, etc.).
  */
 function makeLoopSession(overrides?: Partial<Record<string, unknown>>) {
+  // #4231: clear any leaked stuck-state file so tests start with an empty
+  // sliding window. Without this, saveStuckState persistence leaks across
+  // tests sharing /tmp/project.
+  const basePath = (overrides?.basePath as string | undefined) ?? "/tmp/project";
+  try { rmSync(`${basePath}/.gsd/runtime/stuck-state.json`, { force: true }); } catch { /* ignore */ }
   return {
     active: true,
     verbose: false,
     stepMode: false,
     paused: false,
-    basePath: "/tmp/project",
+    basePath,
     originalBasePath: "",
     currentMilestoneId: "M001",
     currentUnit: null,
@@ -1628,6 +1634,59 @@ test("stuck detection: does not push to window during verification retry", async
     4,
     "verification should have been called 4 times (1 initial + 3 retries)",
   );
+});
+
+// Regression test for #4231: saveStuckState must be called after dev-path
+// iterations so the sliding window survives session restarts. Previously only
+// the custom-engine path persisted state — dev-path iterations lost stuck
+// detection history on every crash, letting the same unit burn a full retry
+// budget each session.
+test("#4231 dev-path iteration persists stuck-state.json to disk", async (t) => {
+  _resetPendingResolve();
+
+  const tmp = mkdtempSync(join(tmpdir(), "gsd-stuck-state-"));
+  t.after(() => { rmSync(tmp, { recursive: true, force: true }); });
+
+  const ctx = makeMockCtx();
+  ctx.ui.setStatus = () => {};
+  ctx.ui.notify = () => {};
+  const pi = makeMockPi();
+  const s = makeLoopSession({ basePath: tmp });
+
+  const deps = makeMockDeps({
+    deriveState: async () => ({
+      phase: "executing",
+      activeMilestone: { id: "M001", title: "Test", status: "active" },
+      activeSlice: { id: "S01", title: "Slice 1" },
+      activeTask: { id: "T01" },
+      registry: [{ id: "M001", status: "active" }],
+      blockers: [],
+    }) as any,
+    resolveDispatch: async () => ({
+      action: "dispatch" as const,
+      unitType: "execute-task",
+      unitId: "M001/S01/T01",
+      prompt: "do the thing",
+    }),
+    postUnitPostVerification: async () => {
+      s.active = false;
+      return "continue" as const;
+    },
+  });
+
+  const loopPromise = autoLoop(ctx, pi, s, deps);
+  await new Promise((r) => setTimeout(r, 50));
+  resolveAgentEnd(makeEvent());
+  await loopPromise;
+
+  const statePath = join(tmp, ".gsd", "runtime", "stuck-state.json");
+  assert.ok(
+    existsSync(statePath),
+    "stuck-state.json should be persisted after dev-path iteration",
+  );
+  const parsed = JSON.parse(readFileSync(statePath, "utf-8"));
+  assert.ok(Array.isArray(parsed.recentUnits), "recentUnits should be an array");
+  assert.ok(parsed.recentUnits.length >= 1, "recentUnits should contain the dispatched unit");
 });
 
 // ── detectStuck unit tests ────────────────────────────────────────────────────

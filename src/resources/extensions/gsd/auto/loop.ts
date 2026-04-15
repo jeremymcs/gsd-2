@@ -502,6 +502,7 @@ export async function autoLoop(
       consecutiveCooldowns = 0;
       recentErrorMessages.length = 0;
       deps.emitJournalEvent({ ts: new Date().toISOString(), flowId, seq: nextSeq(), eventType: "iteration-end", data: { iteration } });
+      saveStuckState(s.basePath, loopState); // persist across session restarts (#4231)
       debugLog("autoLoop", { phase: "iteration-complete", iteration });
       finishTurn("completed");
     } catch (loopErr) {
@@ -512,6 +513,7 @@ export async function autoLoop(
       // completion even on failure (#2344). Without this, errors in
       // runFinalize leave the journal incomplete, making diagnosis harder.
       deps.emitJournalEvent({ ts: new Date().toISOString(), flowId, seq: nextSeq(), eventType: "iteration-end", data: { iteration, error: msg } });
+      saveStuckState(s.basePath, loopState); // persist across session restarts (#4231)
 
       // ── Infrastructure errors: immediate stop, no retry ──
       // These are unrecoverable (disk full, OOM, etc.). Retrying just burns
