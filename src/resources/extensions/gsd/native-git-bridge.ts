@@ -764,7 +764,7 @@ function trySelfHealGsdGitignore(basePath: string): boolean {
  * `git.manage_gitignore: false` forbids the self-heal path. Protects user
  * work by never silently dropping new real files.
  */
-function stageUntrackedExcludingDotGsd(basePath: string): void {
+function stageUntrackedExcludingDotGsd(basePath: string, exclusions: readonly string[] = []): void {
   // Stage tracked modifications first. `git add -u` never fails on pathspec
   // issues because it doesn't walk untracked trees.
   gitFileExec(basePath, ["add", "-u"]);
@@ -789,6 +789,9 @@ function stageUntrackedExcludingDotGsd(basePath: string): void {
     if (path === ".gsd" || path.startsWith(".gsd/")) continue;
     if (path === ".gsd-id" || path === ".gsd.migrating") continue;
     if (path === ".bg-shell" || path.startsWith(".bg-shell/")) continue;
+    // Honor caller-provided exclusions so the fallback path matches the
+    // behavior of the exclusion-aware staging it's replacing.
+    if (exclusions.some(e => path === e || path.startsWith(`${e}/`))) continue;
     untracked.push(path);
   }
 
@@ -805,17 +808,39 @@ function stageUntrackedExcludingDotGsd(basePath: string): void {
  * when `.gsd` is a symlink. Self-heals by adding `.gsd` to `.gitignore`, or
  * falls back to explicit per-file staging so user work is never dropped.
  */
-function fallbackStageWithSymlinkedDotGsd(basePath: string): void {
+function fallbackStageWithSymlinkedDotGsd(basePath: string, exclusions: readonly string[] = []): void {
+  const retryAdd = (): void => {
+    if (exclusions.length === 0) {
+      gitFileExec(basePath, ["add", "-A"]);
+      return;
+    }
+    // Inline pathspec-aware retry to avoid recursing into
+    // nativeAddAllWithExclusions' symlink fallback.
+    const pathspecs = exclusions.map(e => `:!${e}`);
+    try {
+      execFileSync("git", ["add", "-A", "--", ...pathspecs], {
+        cwd: basePath,
+        stdio: ["ignore", "pipe", "pipe"],
+        encoding: "utf-8",
+        env: GIT_NO_PROMPT_ENV,
+      });
+    } catch (err: unknown) {
+      const stderr = (err as { stderr?: string })?.stderr ?? "";
+      if (stderr.includes("ignored by one of your .gitignore files")) return;
+      throw new GSDError(GSD_GIT_ERROR, `git add -A with exclusions failed in ${basePath}: ${getErrorMessage(err)}`);
+    }
+  };
+
   if (isDotGsdIgnored(basePath)) {
-    gitFileExec(basePath, ["add", "-A"]);
+    retryAdd();
     return;
   }
   if (trySelfHealGsdGitignore(basePath)) {
-    gitFileExec(basePath, ["add", "-A"]);
+    retryAdd();
     return;
   }
   // `manage_gitignore: false` — protect work by staging files explicitly.
-  stageUntrackedExcludingDotGsd(basePath);
+  stageUntrackedExcludingDotGsd(basePath, exclusions);
 }
 
 /**
@@ -857,7 +882,7 @@ export function nativeAddAllWithExclusions(basePath: string, exclusions: readonl
     // real files explicitly when `git.manage_gitignore: false` forbids the
     // self-heal path. Either way, user work is protected from silent drops.
     if (stderr.includes("beyond a symbolic link")) {
-      fallbackStageWithSymlinkedDotGsd(basePath);
+      fallbackStageWithSymlinkedDotGsd(basePath, exclusions);
       return;
     }
     throw new GSDError(GSD_GIT_ERROR, `git add -A with exclusions failed in ${basePath}: ${getErrorMessage(err)}`);
