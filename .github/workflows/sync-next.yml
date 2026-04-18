@@ -1,0 +1,22 @@
+# GSD2 + sync-next workflow: fast-forward `next` to `main` after every push to `main`
+name: Sync next with main
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Fast-forward next to main
+        run: git push origin HEAD:next
