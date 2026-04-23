@@ -37,9 +37,12 @@ import { registerWorker, updateWorker } from "./worker-registry.js";
 import { loadEffectiveGSDPreferences } from "../gsd/preferences.js";
 import { CmuxClient, shellEscape } from "../cmux/index.js";
 import {
+	DEFAULT_RETRY_POLICY,
 	MAX_PARALLEL_TASKS_HARD_CAP,
 	formatMergeFailureText,
+	mapWithConcurrencyLimit,
 	resolveConcurrency,
+	runWithRetry,
 } from "./helpers.js";
 
 const COLLAPSED_ITEM_COUNT = 10;
@@ -234,26 +237,6 @@ function getDisplayItems(messages: Message[]): DisplayItem[] {
 		}
 	}
 	return items;
-}
-
-async function mapWithConcurrencyLimit<TIn, TOut>(
-	items: TIn[],
-	concurrency: number,
-	fn: (item: TIn, index: number) => Promise<TOut>,
-): Promise<TOut[]> {
-	if (items.length === 0) return [];
-	const limit = Math.max(1, Math.min(concurrency, items.length));
-	const results: TOut[] = new Array(items.length);
-	let nextIndex = 0;
-	const workers = new Array(limit).fill(null).map(async () => {
-		while (true) {
-			const current = nextIndex++;
-			if (current >= items.length) return;
-			results[current] = await fn(items[current], current);
-		}
-	});
-	await Promise.all(workers);
-	return results;
 }
 
 function writePromptToTempFile(agentName: string, prompt: string): { dir: string; filePath: string } {
@@ -900,7 +883,6 @@ export default function (pi: ExtensionAPI) {
 					}
 				};
 
-				const MAX_RETRIES = 1; // Retry failed tasks once
 				const batchId = crypto.randomUUID();
 				const batchSize = params.tasks.length;
 				// Pre-create a grid layout for cmux splits so agents get a clean tiled arrangement
@@ -950,14 +932,7 @@ export default function (pi: ExtensionAPI) {
 									},
 									makeDetails("parallel"),
 								);
-							let r = await runTask();
-
-							// Auto-retry failed tasks (likely API rate limit or transient error)
-							const isFailed = r.exitCode !== 0 || (r.messages.length === 0 && !signal?.aborted);
-							if (isFailed && MAX_RETRIES > 0 && !signal?.aborted) {
-								r = await runTask();
-							}
-							return r;
+							return runWithRetry(runTask, DEFAULT_RETRY_POLICY, signal);
 						},
 					);
 

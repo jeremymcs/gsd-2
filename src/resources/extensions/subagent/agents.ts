@@ -5,6 +5,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { getAgentDir, parseFrontmatter } from "@gsd/pi-coding-agent";
+import { MtimeCache } from "./helpers.js";
 
 const PROJECT_AGENT_DIR_CANDIDATES = [".gsd", ".pi"] as const;
 
@@ -134,25 +135,52 @@ function findNearestProjectAgentsDir(cwd: string): string | null {
 	}
 }
 
+// ─── Discovery cache ────────────────────────────────────────────────────────
+// Avoid re-reading and re-parsing every .md file on every tool invocation.
+// The generic MtimeCache records mtimes for the two search directories plus
+// every agent file we loaded; a subsequent lookup is valid iff all of those
+// mtimes still match. Directory mtimes catch file add/remove, per-file mtimes
+// catch content edits.
+
+const discoveryCache = new MtimeCache<AgentDiscoveryResult>();
+
+/** @internal Exported for testing only. */
+export function _resetDiscoveryCache(): void {
+	discoveryCache.clear();
+}
+
 export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
 	const userDir = path.join(getAgentDir(), "agents");
 	const projectAgentsDir = findNearestProjectAgentsDir(cwd);
+	const cacheKey = `${scope}|${userDir}|${projectAgentsDir ?? ""}`;
 
-	const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
-	const projectAgents = scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
+	return discoveryCache.get(cacheKey, () => {
+		const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
+		const projectAgents = scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
 
-	const agentMap = new Map<string, AgentConfig>();
+		const agentMap = new Map<string, AgentConfig>();
 
-	if (scope === "both") {
-		for (const agent of userAgents) agentMap.set(agent.name, agent);
-		for (const agent of projectAgents) agentMap.set(agent.name, agent);
-	} else if (scope === "user") {
-		for (const agent of userAgents) agentMap.set(agent.name, agent);
-	} else {
-		for (const agent of projectAgents) agentMap.set(agent.name, agent);
-	}
+		if (scope === "both") {
+			for (const agent of userAgents) agentMap.set(agent.name, agent);
+			for (const agent of projectAgents) agentMap.set(agent.name, agent);
+		} else if (scope === "user") {
+			for (const agent of userAgents) agentMap.set(agent.name, agent);
+		} else {
+			for (const agent of projectAgents) agentMap.set(agent.name, agent);
+		}
 
-	return { agents: Array.from(agentMap.values()), projectAgentsDir };
+		const dirs = [userDir];
+		if (projectAgentsDir) dirs.push(projectAgentsDir);
+		const files = [...userAgents, ...projectAgents].map((a) => a.filePath);
+
+		return {
+			value: {
+				agents: Array.from(agentMap.values()),
+				projectAgentsDir,
+			},
+			sources: { dirs, files },
+		};
+	});
 }
 
 export function formatAgentList(agents: AgentConfig[], maxItems: number): { text: string; remaining: number } {
