@@ -27,7 +27,6 @@ import { formatTokenCount } from "../shared/mod.js";
 import { getCurrentPhase } from "../shared/gsd-phase-state.js";
 import { type AgentConfig, type AgentScope, discoverAgents } from "./agents.js";
 import {
-	type IsolationEnvironment,
 	type IsolationMode,
 	type MergeResult,
 	createIsolation,
@@ -37,9 +36,12 @@ import {
 import { registerWorker, updateWorker } from "./worker-registry.js";
 import { loadEffectiveGSDPreferences } from "../gsd/preferences.js";
 import { CmuxClient, shellEscape } from "../cmux/index.js";
+import {
+	MAX_PARALLEL_TASKS_HARD_CAP,
+	formatMergeFailureText,
+	resolveConcurrency,
+} from "./helpers.js";
 
-const MAX_PARALLEL_TASKS = 8;
-const MAX_CONCURRENCY = 4;
 const COLLAPSED_ITEM_COUNT = 10;
 const liveSubagentProcesses = new Set<ChildProcess>();
 
@@ -196,6 +198,8 @@ interface SingleResult {
 	stopReason?: string;
 	errorMessage?: string;
 	step?: number;
+	/** Merge result for isolated runs. Absent when the run was not isolated. */
+	mergeResult?: MergeResult;
 }
 
 interface SubagentDetails {
@@ -325,6 +329,40 @@ async function waitForFile(filePath: string, signal: AbortSignal | undefined, ti
 }
 
 type OnUpdateCallback = (partial: AgentToolResult<SubagentDetails>) => void;
+
+/**
+ * Wrap a subagent run in an optional isolation environment.
+ *
+ * When `useIsolation` is false, `run` is called with `repoRoot` directly and no
+ * worktree/overlay is created. When true, a fresh isolation env is created for
+ * this invocation, the subagent runs against its working directory, and any
+ * delta is merged back into `repoRoot` via `mergeDeltaPatches`. Cleanup runs
+ * unconditionally in a `finally` block so aborted runs still tear down.
+ */
+async function runWithOptionalIsolation<T>(
+	repoRoot: string,
+	useIsolation: boolean,
+	isolationMode: IsolationMode,
+	run: (workDir: string) => Promise<T>,
+): Promise<{ result: T; mergeResult?: MergeResult }> {
+	if (!useIsolation) {
+		const result = await run(repoRoot);
+		return { result };
+	}
+	const taskId = crypto.randomUUID();
+	const isolation = await createIsolation(repoRoot, taskId, isolationMode);
+	try {
+		const result = await run(isolation.workDir);
+		let mergeResult: MergeResult | undefined;
+		const patches = await isolation.captureDelta();
+		if (patches.length > 0) {
+			mergeResult = await mergeDeltaPatches(repoRoot, patches);
+		}
+		return { result, mergeResult };
+	} finally {
+		await isolation.cleanup();
+	}
+}
 
 async function runSingleAgent(
 	defaultCwd: string,
@@ -675,8 +713,10 @@ export default function (pi: ExtensionAPI) {
 			const discovery = discoverAgents(ctx.cwd, agentScope);
 			const agents = discovery.agents;
 			const confirmProjectAgents = params.confirmProjectAgents ?? false;
-			const cmuxClient = CmuxClient.fromPreferences(loadEffectiveGSDPreferences()?.preferences);
+			const effectivePrefs = loadEffectiveGSDPreferences()?.preferences;
+			const cmuxClient = CmuxClient.fromPreferences(effectivePrefs);
 			const cmuxSplitsEnabled = cmuxClient.getConfig().splits;
+			const concurrency = resolveConcurrency(effectivePrefs);
 
 			// Resolve isolation mode
 			const isolationMode = readIsolationMode();
@@ -735,67 +775,97 @@ export default function (pi: ExtensionAPI) {
 			}
 
 			if (params.chain && params.chain.length > 0) {
-				const results: SingleResult[] = [];
-				let previousOutput = "";
+				const chainSteps = params.chain;
+				type ChainOutcome = { toolResult: AgentToolResult<SubagentDetails>; results: SingleResult[] };
 
-				for (let i = 0; i < params.chain.length; i++) {
-					const step = params.chain[i];
-					const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
+				const { result: outcome, mergeResult } = await runWithOptionalIsolation<ChainOutcome>(
+					ctx.cwd,
+					useIsolation,
+					isolationMode,
+					async (workDir) => {
+						const results: SingleResult[] = [];
+						let previousOutput = "";
 
-					// Create update callback that includes all previous results
-					const chainUpdate: OnUpdateCallback | undefined = onUpdate
-						? (partial) => {
-								// Combine completed results with current streaming result
-								const currentResult = partial.details?.results[0];
-								if (currentResult) {
-									const allResults = [...results, currentResult];
-									onUpdate({
-										content: partial.content,
-										details: makeDetails("chain")(allResults),
-									});
-								}
+						for (let i = 0; i < chainSteps.length; i++) {
+							const step = chainSteps[i];
+							const taskWithContext = step.task.replace(/\{previous\}/g, previousOutput);
+
+							// Create update callback that includes all previous results
+							const chainUpdate: OnUpdateCallback | undefined = onUpdate
+								? (partial) => {
+										// Combine completed results with current streaming result
+										const currentResult = partial.details?.results[0];
+										if (currentResult) {
+											const allResults = [...results, currentResult];
+											onUpdate({
+												content: partial.content,
+												details: makeDetails("chain")(allResults),
+											});
+										}
+									}
+								: undefined;
+
+							const result = await runSingleAgent(
+								ctx.cwd,
+								agents,
+								step.agent,
+								taskWithContext,
+								step.cwd ?? workDir,
+								i + 1,
+								signal,
+								chainUpdate,
+								makeDetails("chain"),
+							);
+							results.push(result);
+
+							const isError =
+								result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+							if (isError) {
+								const errorMsg =
+									result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+								return {
+									toolResult: {
+										content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
+										details: makeDetails("chain")(results),
+										isError: true,
+									},
+									results,
+								};
 							}
-						: undefined;
-
-					const result = await runSingleAgent(
-						ctx.cwd,
-						agents,
-						step.agent,
-						taskWithContext,
-						step.cwd,
-						i + 1,
-						signal,
-						chainUpdate,
-						makeDetails("chain"),
-					);
-					results.push(result);
-
-					const isError =
-						result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-					if (isError) {
-						const errorMsg =
-							result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
+							previousOutput = getFinalOutput(result.messages);
+						}
 						return {
-							content: [{ type: "text", text: `Chain stopped at step ${i + 1} (${step.agent}): ${errorMsg}` }],
-							details: makeDetails("chain")(results),
-							isError: true,
+							toolResult: {
+								content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
+								details: makeDetails("chain")(results),
+							},
+							results,
 						};
-					}
-					previousOutput = getFinalOutput(result.messages);
+					},
+				);
+
+				const lastResult = outcome.results[outcome.results.length - 1];
+				if (mergeResult && lastResult) lastResult.mergeResult = mergeResult;
+
+				if (mergeResult && !mergeResult.success) {
+					const baseText =
+						outcome.toolResult.content[0]?.type === "text" ? outcome.toolResult.content[0].text : "";
+					return {
+						content: [{ type: "text", text: formatMergeFailureText(baseText, mergeResult) }],
+						details: makeDetails("chain")(outcome.results),
+						isError: true,
+					};
 				}
-				return {
-					content: [{ type: "text", text: getFinalOutput(results[results.length - 1].messages) || "(no output)" }],
-					details: makeDetails("chain")(results),
-				};
+				return outcome.toolResult;
 			}
 
 			if (params.tasks && params.tasks.length > 0) {
-				if (params.tasks.length > MAX_PARALLEL_TASKS)
+				if (params.tasks.length > MAX_PARALLEL_TASKS_HARD_CAP)
 					return {
 						content: [
 							{
 								type: "text",
-								text: `Too many parallel tasks (${params.tasks.length}). Max is ${MAX_PARALLEL_TASKS}.`,
+								text: `Too many parallel tasks (${params.tasks.length}). Max is ${MAX_PARALLEL_TASKS_HARD_CAP}.`,
 							},
 						],
 						details: makeDetails("parallel")([]),
@@ -835,67 +905,96 @@ export default function (pi: ExtensionAPI) {
 				const batchSize = params.tasks.length;
 				// Pre-create a grid layout for cmux splits so agents get a clean tiled arrangement
 				const gridSurfaces = cmuxSplitsEnabled
-					? await cmuxClient.createGridLayout(Math.min(batchSize, MAX_CONCURRENCY))
+					? await cmuxClient.createGridLayout(Math.min(batchSize, concurrency))
 					: [];
-				const results = await mapWithConcurrencyLimit(params.tasks, MAX_CONCURRENCY, async (t, index) => {
+				const results = await mapWithConcurrencyLimit(params.tasks, concurrency, async (t, index) => {
 					const workerId = registerWorker(t.agent, t.task, index, batchSize, batchId);
-					const runTask = () => cmuxSplitsEnabled
-						? runSingleAgentInCmuxSplit(
-							cmuxClient,
-							gridSurfaces[index] ?? (index % 2 === 0 ? "right" : "down"),
-							ctx.cwd,
-							agents,
-							t.agent,
-							t.task,
-							t.cwd,
-							undefined,
-							signal,
-							(partial) => {
-								if (partial.details?.results[0]) {
-									allResults[index] = partial.details.results[0];
-									emitParallelUpdate();
-								}
-							},
-							makeDetails("parallel"),
-						)
-						: runSingleAgent(
-							ctx.cwd,
-							agents,
-							t.agent,
-							t.task,
-							t.cwd,
-							undefined,
-							signal,
-							(partial) => {
-								if (partial.details?.results[0]) {
-									allResults[index] = partial.details.results[0];
-									emitParallelUpdate();
-								}
-							},
-							makeDetails("parallel"),
-						);
-					let result = await runTask();
 
-					// Auto-retry failed tasks (likely API rate limit or transient error)
-					const isFailed = result.exitCode !== 0 || (result.messages.length === 0 && !signal?.aborted);
-					if (isFailed && MAX_RETRIES > 0 && !signal?.aborted) {
-						result = await runTask();
-					}
+					const { result, mergeResult } = await runWithOptionalIsolation<SingleResult>(
+						ctx.cwd,
+						useIsolation,
+						isolationMode,
+						async (workDir) => {
+							const runTask = () => cmuxSplitsEnabled
+								? runSingleAgentInCmuxSplit(
+									cmuxClient,
+									gridSurfaces[index] ?? (index % 2 === 0 ? "right" : "down"),
+									ctx.cwd,
+									agents,
+									t.agent,
+									t.task,
+									t.cwd ?? workDir,
+									undefined,
+									signal,
+									(partial) => {
+										if (partial.details?.results[0]) {
+											allResults[index] = partial.details.results[0];
+											emitParallelUpdate();
+										}
+									},
+									makeDetails("parallel"),
+								)
+								: runSingleAgent(
+									ctx.cwd,
+									agents,
+									t.agent,
+									t.task,
+									t.cwd ?? workDir,
+									undefined,
+									signal,
+									(partial) => {
+										if (partial.details?.results[0]) {
+											allResults[index] = partial.details.results[0];
+											emitParallelUpdate();
+										}
+									},
+									makeDetails("parallel"),
+								);
+							let r = await runTask();
 
-					updateWorker(workerId, result.exitCode === 0 ? "completed" : "failed");
+							// Auto-retry failed tasks (likely API rate limit or transient error)
+							const isFailed = r.exitCode !== 0 || (r.messages.length === 0 && !signal?.aborted);
+							if (isFailed && MAX_RETRIES > 0 && !signal?.aborted) {
+								r = await runTask();
+							}
+							return r;
+						},
+					);
+
+					if (mergeResult) result.mergeResult = mergeResult;
+					const taskSucceeded = result.exitCode === 0 && (!mergeResult || mergeResult.success);
+					updateWorker(workerId, taskSucceeded ? "completed" : "failed");
 					allResults[index] = result;
 					emitParallelUpdate();
 					return result;
 				});
 
-				const successCount = results.filter((r) => r.exitCode === 0).length;
+				const isTaskFailure = (r: SingleResult) =>
+					r.exitCode !== 0 ||
+					r.stopReason === "error" ||
+					r.stopReason === "aborted" ||
+					Boolean(r.mergeResult && !r.mergeResult.success);
+				const successCount = results.filter((r) => !isTaskFailure(r)).length;
 				const summaries = results.map((r) => {
-					const isError = r.exitCode !== 0 || r.stopReason === "error" || r.stopReason === "aborted";
-					const output = isError
-						? (r.errorMessage || r.stderr || getFinalOutput(r.messages) || "(no output)")
-						: getFinalOutput(r.messages);
-					return `[${r.agent}] ${r.exitCode === 0 ? "completed" : `failed (exit ${r.exitCode})`}: ${output || "(no output)"}`;
+					const failed = isTaskFailure(r);
+					const mergeFailed = Boolean(r.mergeResult && !r.mergeResult.success);
+					if (!failed) {
+						return `[${r.agent}] completed: ${getFinalOutput(r.messages) || "(no output)"}`;
+					}
+					const output =
+						r.errorMessage || r.stderr || getFinalOutput(r.messages) || "(no output)";
+					const reason = r.exitCode !== 0
+						? `failed (exit ${r.exitCode})`
+						: mergeFailed
+							? "merge failed"
+							: `failed (${r.stopReason ?? "unknown"})`;
+					const mergeNote = mergeFailed
+						? `\n  ✗ ${r.mergeResult?.error ?? "merge error"}` +
+						  ` (failed patches: ${r.mergeResult?.failedPatches.join(", ") || "(none listed)"})`
+						: "";
+					return `[${r.agent}] ${reason}: ${output}${mergeNote}`;
 				});
+				const hadMergeFailure = results.some((r) => r.mergeResult && !r.mergeResult.success);
 				return {
 					content: [
 						{
@@ -904,78 +1003,77 @@ export default function (pi: ExtensionAPI) {
 						},
 					],
 					details: makeDetails("parallel")(results),
+					...(hadMergeFailure ? { isError: true } : {}),
 				};
 			}
 
 			if (params.agent && params.task) {
-				let isolation: IsolationEnvironment | null = null;
-				let mergeResult: MergeResult | undefined;
-				try {
-					const effectiveCwd = params.cwd ?? ctx.cwd;
+				const effectiveCwd = params.cwd ?? ctx.cwd;
+				const singleAgent = params.agent;
+				const singleTask = params.task;
+				const explicitCwd = params.cwd;
 
-					if (useIsolation) {
-						const taskId = crypto.randomUUID();
-						isolation = await createIsolation(effectiveCwd, taskId, isolationMode);
-					}
-
-					const result = cmuxSplitsEnabled
-						? await runSingleAgentInCmuxSplit(
-							cmuxClient,
-							"right",
+				const { result, mergeResult } = await runWithOptionalIsolation<SingleResult>(
+					effectiveCwd,
+					useIsolation,
+					isolationMode,
+					async (workDir) => {
+						const runCwd = useIsolation ? workDir : explicitCwd;
+						if (cmuxSplitsEnabled) {
+							return runSingleAgentInCmuxSplit(
+								cmuxClient,
+								"right",
+								ctx.cwd,
+								agents,
+								singleAgent,
+								singleTask,
+								runCwd,
+								undefined,
+								signal,
+								onUpdate,
+								makeDetails("single"),
+							);
+						}
+						return runSingleAgent(
 							ctx.cwd,
 							agents,
-							params.agent,
-							params.task,
-							isolation ? isolation.workDir : params.cwd,
-							undefined,
-							signal,
-							onUpdate,
-							makeDetails("single"),
-						)
-						: await runSingleAgent(
-							ctx.cwd,
-							agents,
-							params.agent,
-							params.task,
-							isolation ? isolation.workDir : params.cwd,
+							singleAgent,
+							singleTask,
+							runCwd,
 							undefined,
 							signal,
 							onUpdate,
 							makeDetails("single"),
 						);
+					},
+				);
 
-					// Capture and merge delta if isolated
-					if (isolation) {
-						const patches = await isolation.captureDelta();
-						if (patches.length > 0) {
-							mergeResult = await mergeDeltaPatches(effectiveCwd, patches);
-						}
-					}
+				if (mergeResult) result.mergeResult = mergeResult;
 
-					const isError = result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
-					if (isError) {
-						const errorMsg =
-							result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
-						return {
-							content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
-							details: makeDetails("single")([result]),
-							isError: true,
-						};
-					}
-
-					let outputText = getFinalOutput(result.messages) || "(no output)";
-					if (mergeResult && !mergeResult.success) {
-						outputText += `\n\n⚠ Patch merge failed: ${mergeResult.error || "unknown error"}`;
-					}
+				const isError =
+					result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
+				if (isError) {
+					const errorMsg =
+						result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
 					return {
-						content: [{ type: "text", text: outputText }],
+						content: [{ type: "text", text: `Agent ${result.stopReason || "failed"}: ${errorMsg}` }],
 						details: makeDetails("single")([result]),
+						isError: true,
 					};
-				} finally {
-					if (isolation) {
-						await isolation.cleanup();
-					}
 				}
+
+				const baseOutput = getFinalOutput(result.messages) || "(no output)";
+				if (mergeResult && !mergeResult.success) {
+					return {
+						content: [{ type: "text", text: formatMergeFailureText(baseOutput, mergeResult) }],
+						details: makeDetails("single")([result]),
+						isError: true,
+					};
+				}
+				return {
+					content: [{ type: "text", text: baseOutput }],
+					details: makeDetails("single")([result]),
+				};
 			}
 
 			const available = agents.map((a) => `${a.name} (${a.source})`).join(", ") || "none";
