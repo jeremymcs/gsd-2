@@ -766,8 +766,12 @@ export async function runPreDispatch(
     );
   }
 
-  // Mid-merge safety check
-  const mergeReconcileResult = deps.reconcileMergeState(s.basePath, ctx);
+  // Mid-merge safety check — routes through the UOK merge-state-check gate
+  // when wired (uok.gates + uok.merge_state_checks); otherwise falls back to
+  // the legacy direct call so behaviour is identical on the legacy path.
+  const mergeReconcileResult = deps.runMergeStateGate
+    ? await deps.runMergeStateGate(s.basePath, ctx)
+    : deps.reconcileMergeState(s.basePath, ctx);
   if (mergeReconcileResult === "blocked") {
     await deps.pauseAuto(ctx, pi);
     debugLog("autoLoop", { phase: "exit", reason: "merge-reconciliation-blocked" });

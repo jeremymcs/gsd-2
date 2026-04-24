@@ -207,6 +207,12 @@ import { initHealthWidget } from "./health-widget.js";
 import { runLegacyAutoLoop, runUokKernelLoop, resolveAgentEnd, resolveAgentEndCancelled, _resetPendingResolve, isSessionSwitchInFlight, type LoopDeps, type ErrorContext } from "./auto-loop.js";
 import { runAutoLoopWithUok } from "./uok/kernel.js";
 import { resolveUokFlags } from "./uok/flags.js";
+import { UokGateRunner } from "./uok/gate-runner.js";
+import {
+  buildMergeStateGate,
+  MERGE_STATE_GATE_ID,
+  translateGateResultToMergeReconcile,
+} from "./uok/merge-state-gate.js";
 // Slice-level parallelism (#2340)
 import { getEligibleSlices } from "./slice-parallel-eligibility.js";
 import { startSliceParallel } from "./slice-parallel-orchestrator.js";
@@ -1236,6 +1242,24 @@ function buildLoopDeps(): LoopDeps {
     autoWorktreeBranch,
     resolveMilestoneFile,
     reconcileMergeState,
+    runMergeStateGate: async (basePath: string, ctx: ExtensionContext) => {
+      const livePrefs = loadEffectiveGSDPreferences(basePath || undefined)?.preferences;
+      const liveUokFlags = resolveUokFlags(livePrefs);
+      if (!(liveUokFlags.enabled && liveUokFlags.gates && liveUokFlags.mergeStateChecks)) {
+        return reconcileMergeState(basePath, ctx);
+      }
+      const runner = new UokGateRunner();
+      runner.register(buildMergeStateGate(ctx));
+      const traceId = s.currentTraceId ?? `pre-dispatch-${Date.now()}`;
+      const turnId = s.currentTurnId ?? `pre-dispatch-${Date.now()}`;
+      const result = await runner.run(MERGE_STATE_GATE_ID, {
+        basePath,
+        traceId,
+        turnId,
+        milestoneId: s.currentMilestoneId ?? undefined,
+      });
+      return translateGateResultToMergeReconcile(result);
+    },
 
     // Budget/context/secrets
     getLedger,

@@ -404,6 +404,9 @@ function mergePreferences(base: GSDPreferences, override: GSDPreferences): GSDPr
           plan_v2: (base.uok?.plan_v2 || override.uok?.plan_v2)
             ? { ...(base.uok?.plan_v2 ?? {}), ...(override.uok?.plan_v2 ?? {}) }
             : undefined,
+          merge_state_checks: (base.uok?.merge_state_checks || override.uok?.merge_state_checks)
+            ? { ...(base.uok?.merge_state_checks ?? {}), ...(override.uok?.merge_state_checks ?? {}) }
+            : undefined,
         }
       : undefined,
     token_profile: override.token_profile ?? base.token_profile,

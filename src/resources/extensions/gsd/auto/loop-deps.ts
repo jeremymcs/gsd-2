@@ -122,6 +122,13 @@ export interface LoopDeps {
     fileType: string,
   ) => string | null;
   reconcileMergeState: (basePath: string, ctx: ExtensionContext) => MergeReconcileResult;
+  /**
+   * UOK merge-state-check gate (#mergestate). Wired only when
+   * `uok.gates` and `uok.merge_state_checks` are both enabled. When present,
+   * supersedes the legacy `reconcileMergeState` call at turn-start so the
+   * outcome is persisted to `gate_runs` and emitted as a UOK audit event.
+   */
+  runMergeStateGate?: (basePath: string, ctx: ExtensionContext) => Promise<MergeReconcileResult>;
 
   // Clean-root preflight gate (#2909)
   preflightCleanRoot: (

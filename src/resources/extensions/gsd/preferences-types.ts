@@ -270,6 +270,9 @@ export interface UokPreferences {
   plan_v2?: {
     enabled?: boolean;
   };
+  merge_state_checks?: {
+    enabled?: boolean;
+  };
 }
 
 /**

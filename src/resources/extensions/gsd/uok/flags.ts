@@ -12,6 +12,7 @@ export interface UokFlags {
   gitopsTurnPush: boolean;
   auditUnified: boolean;
   planV2: boolean;
+  mergeStateChecks: boolean;
 }
 
 function envForcesLegacyFallback(): boolean {
@@ -36,6 +37,7 @@ export function resolveUokFlags(prefs: GSDPreferences | undefined): UokFlags {
     gitopsTurnPush: uok?.gitops?.turn_push === true,
     auditUnified: uok?.audit_unified?.enabled ?? true,
     planV2: uok?.plan_v2?.enabled ?? true,
+    mergeStateChecks: uok?.merge_state_checks?.enabled ?? true,
   };
 }
 

@@ -178,7 +178,7 @@ export function validatePreferences(preferences: GSDPreferences): {
       }
 
       const parseEnabledBlock = (
-        key: "legacy_fallback" | "gates" | "model_policy" | "execution_graph" | "audit_unified" | "plan_v2",
+        key: "legacy_fallback" | "gates" | "model_policy" | "execution_graph" | "audit_unified" | "plan_v2" | "merge_state_checks",
       ): void => {
         const value = raw[key];
         if (value === undefined) return;
@@ -207,6 +207,7 @@ export function validatePreferences(preferences: GSDPreferences): {
       parseEnabledBlock("execution_graph");
       parseEnabledBlock("audit_unified");
       parseEnabledBlock("plan_v2");
+      parseEnabledBlock("merge_state_checks");
 
       if (raw.gitops !== undefined) {
         if (typeof raw.gitops !== "object" || raw.gitops === null) {
@@ -251,6 +252,7 @@ export function validatePreferences(preferences: GSDPreferences): {
         "gitops",
         "audit_unified",
         "plan_v2",
+        "merge_state_checks",
       ]);
       for (const key of Object.keys(raw)) {
         if (!knownUokKeys.has(key)) {
