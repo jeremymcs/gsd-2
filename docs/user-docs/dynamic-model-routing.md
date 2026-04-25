@@ -68,11 +68,11 @@ Keep `cross_provider: false` when enabling this flag unless every flat-rate prov
 
 ### `tier_models`
 
-Override which model is used for each tier. When omitted, the router uses a built-in capability mapping that knows common model families:
+Override which model is used for each tier. When omitted, the router uses the built-in `MODEL_CAPABILITY_TIER` mapping; the following are examples, not the exhaustive list:
 
-- **Light:** `claude-haiku-4-5`, `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-5-mini`, `gpt-5-nano`, `gpt-5.1-codex-mini`, `gpt-5.3-codex-spark`, `gpt-5.4-mini`, `gemini-2.0-flash`
-- **Standard:** `claude-sonnet-4-6`, `gpt-4o`, `gpt-4.1`, `gpt-5.1-codex-max`, `gemini-2.5-pro`, `deepseek-chat`
-- **Heavy:** `claude-opus-4-6`, `claude-opus-4-7`, `gpt-5`, `gpt-5-pro`, `gpt-5.1`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5.3-codex`, `gpt-5.4`, `gpt-5.5`, `o1`, `o3`, `o4-mini`
+- **Light (examples):** `claude-haiku-4-5`, `gpt-4o-mini`, `gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-5-mini`, `gpt-5-nano`, `gpt-5.1-codex-mini`, `gpt-5.3-codex-spark`, `gpt-5.4-mini`, `gemini-2.0-flash`
+- **Standard (examples):** `claude-sonnet-4-6`, `gpt-4o`, `gpt-4.1`, `gpt-5.1-codex-max`, `gemini-2.5-pro`, `deepseek-chat`
+- **Heavy (examples):** `claude-opus-4-6`, `claude-opus-4-7`, `gpt-5`, `gpt-5-pro`, `gpt-5.1`, `gpt-5.2`, `gpt-5.2-codex`, `gpt-5.3-codex`, `gpt-5.4`, `gpt-5.5`, `o1`, `o3`, `o4-mini`
 
 ### `escalate_on_failure`
 

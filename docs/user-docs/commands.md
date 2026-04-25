@@ -163,7 +163,7 @@ Plugins are plain YAML (`.yaml`) or markdown (`.md`) files. See
 | `/gsd extensions update [id]` | Update a single user-installed npm extension to its latest version, or all of them when `id` is omitted. Git/local installs are skipped — reinstall to update. (v2.78) |
 | `/gsd extensions validate <path>` | Validate an extension package directory against the manifest schema before publishing or installing. (v2.78) |
 
-Install sources are auto-detected: starts with `http(s)://` or ends with `.git` → git clone; contains `/` or `.` and exists on disk → local copy; otherwise → `npm pack`. Installed extensions land in `~/.gsd/extensions/<id>/` and the registry records the source so `update` can re-fetch.
+Install sources are auto-detected: `git+`, `git://`, `github:`, `gitlab:`, `bitbucket:`, or `http(s)://` URLs ending in `.git` → git clone; local filesystem paths (for example `/`, `./`, `../`, `~/`) that exist on disk → local copy; otherwise → `npm pack`. Installed extensions land in `~/.gsd/extensions/<id>/` and the registry records the source so `update` can re-fetch.
 
 ## cmux Integration
 
