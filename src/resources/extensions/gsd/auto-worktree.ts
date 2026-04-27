@@ -1423,7 +1423,11 @@ export function isInAutoWorktree(basePath: string): boolean {
   if (!isGsdWorktreePath(cwd)) return false;
 
   const projectRoot = resolveWorktreeProjectRoot(basePath, originalBase);
-  const cwdProjectRoot = resolveWorktreeProjectRoot(cwd, originalBase);
+  const cwdProjectRoot = resolveWorktreeProjectRoot(
+    cwd,
+    undefined,
+    { useProjectRootEnv: false },
+  );
   if (
     normalizeWorktreePathForCompare(projectRoot) !==
     normalizeWorktreePathForCompare(cwdProjectRoot)
@@ -1540,6 +1544,13 @@ export function getAutoWorktreeOriginalBase(): string | null {
 }
 
 export function _resetAutoWorktreeOriginalBaseForTests(): void {
+  if (
+    process.env.NODE_ENV !== "test" &&
+    !process.env.VITEST &&
+    !process.env.GSD_TEST_MODE
+  ) {
+    throw new Error("_resetAutoWorktreeOriginalBaseForTests is for test usage only");
+  }
   originalBase = null;
 }
 
@@ -1551,16 +1562,30 @@ export function getActiveAutoWorktreeContext(): {
   if (!originalBase) return null;
   const cwd = process.cwd();
   if (!isGsdWorktreePath(cwd)) return null;
-  const cwdProjectRoot = resolveWorktreeProjectRoot(cwd, originalBase);
+  const cwdProjectRoot = resolveWorktreeProjectRoot(
+    cwd,
+    undefined,
+    { useProjectRootEnv: false },
+  );
+  const originalBaseResolved = resolveWorktreeProjectRoot(
+    originalBase,
+    undefined,
+    { useProjectRootEnv: false },
+  );
   if (
     normalizeWorktreePathForCompare(cwdProjectRoot) !==
-    normalizeWorktreePathForCompare(originalBase)
+    normalizeWorktreePathForCompare(originalBaseResolved)
   ) {
     return null;
   }
   const worktreeName = detectWorktreeName(cwd);
   if (!worktreeName) return null;
-  const branch = nativeGetCurrentBranch(cwd);
+  let branch: string;
+  try {
+    branch = nativeGetCurrentBranch(cwd);
+  } catch {
+    return null;
+  }
   if (!branch.startsWith("milestone/")) return null;
   return {
     originalBase,

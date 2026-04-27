@@ -45,6 +45,14 @@ function createTempRepo(): string {
   return dir;
 }
 
+function addMilestoneFixture(basePath: string, milestoneId: string): void {
+  const msDir = join(basePath, ".gsd", "milestones", milestoneId);
+  mkdirSync(msDir, { recursive: true });
+  writeFileSync(join(msDir, "CONTEXT.md"), `# ${milestoneId} Context\n`);
+  run("git add .", basePath);
+  run(`git commit -m "add milestone ${milestoneId}"`, basePath);
+}
+
 describe("auto-worktree lifecycle", () => {
   const savedCwd = process.cwd();
   let tempDir = "";
@@ -158,7 +166,14 @@ describe("auto-worktree lifecycle", () => {
       const realWtPath = realpathSync(wtPath);
       assert.ok(realWtPath.startsWith(storage), "git registered the symlink-resolved worktree path");
 
-      _resetAutoWorktreeOriginalBaseForTests();
+      const savedTestMode = process.env.GSD_TEST_MODE;
+      process.env.GSD_TEST_MODE = "1";
+      try {
+        _resetAutoWorktreeOriginalBaseForTests();
+      } finally {
+        if (savedTestMode === undefined) delete process.env.GSD_TEST_MODE;
+        else process.env.GSD_TEST_MODE = savedTestMode;
+      }
       process.chdir(join(realWtPath, ".gsd", "milestones", "M001"));
 
       assert.ok(isInAutoWorktree(tempDir), "structural detection works without module originalBase");
@@ -188,6 +203,31 @@ describe("auto-worktree lifecycle", () => {
       if (savedGsdHome === undefined) delete process.env.GSD_HOME;
       else process.env.GSD_HOME = savedGsdHome;
       rmSync(fakeHome, { recursive: true, force: true });
+    }
+  });
+
+  test("active auto-worktree detection fails closed when cwd belongs to another project", () => {
+    tempDir = createTempRepo();
+    addMilestoneFixture(tempDir, "M001");
+    const otherDir = createTempRepo();
+    addMilestoneFixture(otherDir, "M002");
+    const savedProjectRoot = process.env.GSD_PROJECT_ROOT;
+
+    try {
+      const otherWorktree = createAutoWorktree(otherDir, "M002");
+      const primaryWorktree = createAutoWorktree(tempDir, "M001");
+      assert.strictEqual(process.cwd(), primaryWorktree);
+
+      process.env.GSD_PROJECT_ROOT = tempDir;
+      process.chdir(otherWorktree);
+
+      assert.equal(isInAutoWorktree(tempDir), false);
+      assert.equal(getActiveAutoWorktreeContext(), null);
+    } finally {
+      if (savedProjectRoot === undefined) delete process.env.GSD_PROJECT_ROOT;
+      else process.env.GSD_PROJECT_ROOT = savedProjectRoot;
+      process.chdir(savedCwd);
+      rmSync(otherDir, { recursive: true, force: true });
     }
   });
 

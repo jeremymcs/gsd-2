@@ -9,9 +9,11 @@
  *   next  — dry-run dispatch preview (what auto-mode would do next)
  *   cost  — aggregated parallel worker costs
  *
- * Note: Extension modules are .ts files loaded via jiti (not compiled to .js).
- * We use createJiti() here because this module is imported directly from cli.ts,
- * bypassing the extension loader's jiti setup (#1137).
+ * Note: Extension modules are loaded via jiti — typically as .ts source under the
+ * agent sync dir, with a .js fallback for agents synced from compiled builds, or
+ * via the bundled-resource resolver for source-tree dev. We use createJiti()
+ * here because this module is imported directly from cli.ts, bypassing the
+ * extension loader's jiti setup (#1137).
  */
 
 import { createJiti } from '@mariozechner/jiti'
@@ -63,14 +65,25 @@ const gsdExtensionPath = (...segments: string[]) =>
     ? resolveAgentExtensionModule(agentExtensionsDir, segments)
     : resolveBundledGsdExtensionModule(import.meta.url, segments.join('/'))
 
-function resolveAgentExtensionModule(agentDir: string, segments: string[]): string {
+export function resolveAgentExtensionModule(
+  agentDir: string,
+  segments: string[],
+  opts: {
+    fileExists?: (path: string) => boolean
+    bundledResolver?: (moduleFile: string) => string
+  } = {},
+): string {
+  const fileExists = opts.fileExists ?? existsSync
   const requested = join(agentDir, ...segments)
-  if (existsSync(requested)) return requested
+  if (fileExists(requested)) return requested
   if (segments.length === 1 && segments[0].endsWith('.ts')) {
     const jsPath = join(agentDir, segments[0].replace(/\.ts$/, '.js'))
-    if (existsSync(jsPath)) return jsPath
+    if (fileExists(jsPath)) return jsPath
   }
-  return requested
+  const moduleFile = segments.join('/')
+  return opts.bundledResolver
+    ? opts.bundledResolver(moduleFile)
+    : resolveBundledGsdExtensionModule(import.meta.url, moduleFile)
 }
 
 async function loadExtensionModules() {

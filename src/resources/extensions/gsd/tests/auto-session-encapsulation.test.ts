@@ -47,6 +47,21 @@ test("AutoSession.lockBasePath uses GSD_PROJECT_ROOT for symlink-resolved worktr
   }
 });
 
+test("AutoSession.lockBasePath prefers originalBasePath over GSD_PROJECT_ROOT", () => {
+  const savedProjectRoot = process.env.GSD_PROJECT_ROOT;
+  process.env.GSD_PROJECT_ROOT = "/wrong/project";
+  try {
+    const session = new AutoSession();
+    session.basePath = "/Users/dev/.gsd/projects/abc123/worktrees/M001/slices/S01";
+    session.originalBasePath = "/real/project";
+
+    assert.equal(session.lockBasePath, "/real/project");
+  } finally {
+    if (savedProjectRoot === undefined) delete process.env.GSD_PROJECT_ROOT;
+    else process.env.GSD_PROJECT_ROOT = savedProjectRoot;
+  }
+});
+
 // ── Invariant 1: No module-level mutable variables in auto.ts ────────────────
 
 test("auto.ts has no module-level let declarations", () => {

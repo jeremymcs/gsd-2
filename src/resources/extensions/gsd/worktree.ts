@@ -96,22 +96,13 @@ export function detectWorktreeName(basePath: string): string | null {
 }
 
 /**
- * Resolve the project root from a path that may be inside a worktree.
- * If the path contains a worktrees segment, returns the portion before
- * `/.gsd/`. Otherwise returns the input unchanged.
+ * Return the real project root for a path that may be inside a worktree.
  *
- * When the worker was spawned with GSD_PROJECT_ROOT set, use that directly —
- * the coordinator already knows the real project root unambiguously.
+ * Thin wrapper around resolveWorktreeProjectRoot in `./worktree-root.ts`; see
+ * that module for the canonical resolution rules and edge-case handling.
  *
- * When `/.gsd/` in the resolved path is actually the user-level `~/.gsd/`
- * (common when `.gsd` is a symlink into `~/.gsd/projects/<hash>`), the
- * string-slice heuristic would return `~` — which is catastrophically wrong.
- * In that case, fall back to reading the worktree's `.git` file, which
- * contains a `gitdir:` pointer to the real project's `.git/worktrees/<name>`,
- * giving the real project root unambiguously.
- *
- * Use this in commands that call `process.cwd()` to ensure they always
- * operate against the real project root, not a worktree subdirectory.
+ * Use this in commands that call `process.cwd()` to ensure they operate
+ * against the real project root, not a worktree subdirectory.
  */
 export function resolveProjectRoot(basePath: string): string {
   return resolveWorktreeProjectRoot(basePath);

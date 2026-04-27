@@ -74,6 +74,12 @@ export interface PreExecFailure {
   verdictExcerpt: string;
 }
 
+interface LockBasePathCache {
+  basePath: string;
+  originalBasePath: string;
+  value: string;
+}
+
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 export const STUB_RECOVERY_THRESHOLD = 2;
@@ -102,6 +108,7 @@ export class AutoSession {
   milestoneLockEnvCaptured = false;
   sessionMilestoneLock: string | null = null;
   gitService: GitServiceImpl | null = null;
+  private _lockBasePathCache: LockBasePathCache | null = null;
 
   // ── Dispatch counters ────────────────────────────────────────────────────
   readonly unitDispatchCount = new Map<string, number>();
@@ -227,7 +234,22 @@ export class AutoSession {
   }
 
   get lockBasePath(): string {
-    return resolveWorktreeProjectRoot(this.basePath, this.originalBasePath);
+    const cached = this._lockBasePathCache;
+    if (
+      cached &&
+      cached.basePath === this.basePath &&
+      cached.originalBasePath === this.originalBasePath
+    ) {
+      return cached.value;
+    }
+
+    const value = resolveWorktreeProjectRoot(this.basePath, this.originalBasePath);
+    this._lockBasePathCache = {
+      basePath: this.basePath,
+      originalBasePath: this.originalBasePath,
+      value,
+    };
+    return value;
   }
 
   reset(): void {
@@ -253,6 +275,7 @@ export class AutoSession {
     this.milestoneLockEnvCaptured = false;
     this.sessionMilestoneLock = null;
     this.gitService = null;
+    this._lockBasePathCache = null;
 
     // Dispatch
     this.unitDispatchCount.clear();

@@ -7,6 +7,10 @@ export interface WorktreeSegment {
   afterWorktrees: number;
 }
 
+export interface ResolveWorktreeProjectRootOptions {
+  useProjectRootEnv?: boolean;
+}
+
 export function normalizeWorktreePathForCompare(path: string): string {
   let normalized: string;
   try {
@@ -57,10 +61,14 @@ export function isGsdWorktreePath(path: string): boolean {
 export function resolveWorktreeProjectRoot(
   basePath: string,
   originalBasePath?: string | null,
+  opts: ResolveWorktreeProjectRootOptions = {},
 ): string {
+  const projectRootEnv = opts.useProjectRootEnv === false
+    ? ""
+    : process.env.GSD_PROJECT_ROOT?.trim();
   const preferred =
     originalBasePath?.trim() ||
-    process.env.GSD_PROJECT_ROOT?.trim() ||
+    projectRootEnv ||
     basePath;
 
   return resolveProjectRootFromPath(preferred);
@@ -119,7 +127,7 @@ function resolveProjectRootFromGitFile(worktreePath: string): string | null {
         if (content.startsWith("gitdir: ")) {
           const gitDir = resolve(dir, content.slice(8));
           const dotGitDir = resolve(gitDir, "..", "..");
-          if (dotGitDir.endsWith(".git") || dotGitDir.endsWith(".git/") || dotGitDir.endsWith(".git\\")) {
+          if (dotGitDir.endsWith(".git")) {
             return resolve(dotGitDir, "..");
           }
 

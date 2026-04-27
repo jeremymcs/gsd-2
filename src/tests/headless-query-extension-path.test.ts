@@ -15,6 +15,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 import {
+  resolveAgentExtensionModule,
   resolveGsdAgentExtensionsDir,
   shouldUseAgentExtensionsDir,
 } from '../headless-query.ts'
@@ -85,4 +86,30 @@ test('fileExists callback drives the decision (no real fs required)', () => {
     join('/agent', 'extensions', 'gsd', 'state.ts'),
     join('/agent', 'extensions', 'gsd', 'state.js'),
   ])
+})
+
+test('missing synced agent module falls back to bundled resolver', () => {
+  const calls: string[] = []
+  const resolved = resolveAgentExtensionModule('/agent/extensions/gsd', ['auto-dispatch.ts'], {
+    fileExists: (p) => {
+      calls.push(p)
+      return false
+    },
+    bundledResolver: (moduleFile) => `/bundled/${moduleFile}`,
+  })
+
+  assert.equal(resolved, '/bundled/auto-dispatch.ts')
+  assert.deepEqual(calls, [
+    join('/agent/extensions/gsd', 'auto-dispatch.ts'),
+    join('/agent/extensions/gsd', 'auto-dispatch.js'),
+  ])
+})
+
+test('synced JS agent module wins before bundled fallback', () => {
+  const resolved = resolveAgentExtensionModule('/agent/extensions/gsd', ['preferences.ts'], {
+    fileExists: (p) => p.endsWith('preferences.js'),
+    bundledResolver: (moduleFile) => `/bundled/${moduleFile}`,
+  })
+
+  assert.equal(resolved, join('/agent/extensions/gsd', 'preferences.js'))
 })
