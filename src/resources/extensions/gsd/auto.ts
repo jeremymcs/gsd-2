@@ -1345,7 +1345,7 @@ export async function pauseAuto(
   if (ctx) initHealthWidget(ctx);
   const resumeCmd = s.stepMode ? "/gsd next" : "/gsd auto";
   ctx?.ui.notify(
-    `${s.stepMode ? "Step" : "Auto"}-mode paused (Escape). Type to interact, or ${resumeCmd} to resume.`,
+    `${s.stepMode ? "Step" : "Auto"}-mode paused (Escape). Type to interact, ${resumeCmd} to resume, or /gsd doctor heal to repair stale state.`,
     "info",
   );
 }
