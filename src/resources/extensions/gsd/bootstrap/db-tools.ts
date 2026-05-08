@@ -5,7 +5,7 @@ import type { ExtensionAPI } from "@gsd/pi-coding-agent";
 import { Text } from "@gsd/pi-tui";
 
 import { loadEffectiveGSDPreferences } from "../preferences.js";
-import { ensureDbOpen, safeWorkspaceCwd } from "./dynamic-tools.js";
+import { ensureDbOpen, resolveCtxCwd } from "./dynamic-tools.js";
 import { loadWriteGateSnapshot, shouldBlockRootArtifactSaveInSnapshot } from "./write-gate.js";
 import { StringEnum } from "@gsd/pi-ai";
 import { logError } from "../workflow-logger.js";
@@ -17,10 +17,7 @@ async function loadWorkflowExecutors(): Promise<typeof import("../tools/workflow
 }
 
 function toolWorkspaceRoot(ctx: unknown): string {
-  if (ctx && typeof ctx === "object" && typeof (ctx as { cwd?: unknown }).cwd === "string") {
-    return (ctx as { cwd: string }).cwd;
-  }
-  return safeWorkspaceCwd();
+  return resolveCtxCwd(ctx);
 }
 
 /**

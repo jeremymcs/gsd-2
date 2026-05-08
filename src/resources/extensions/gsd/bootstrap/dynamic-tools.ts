@@ -21,11 +21,16 @@ export function safeWorkspaceCwd(): string {
   }
 }
 
-function resolveToolWorkspaceRoot(ctx?: unknown): string {
+export function resolveCtxCwd(ctx?: unknown): string {
   if (ctx && typeof ctx === "object" && typeof (ctx as { cwd?: unknown }).cwd === "string") {
-    return (ctx as { cwd: string }).cwd;
+    const cwd = (ctx as { cwd: string }).cwd;
+    if (existsSync(cwd)) return cwd;
   }
   return safeWorkspaceCwd();
+}
+
+function resolveToolWorkspaceRoot(ctx?: unknown): string {
+  return resolveCtxCwd(ctx);
 }
 
 /**

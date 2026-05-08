@@ -4,13 +4,10 @@
 
 import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@gsd/pi-coding-agent";
-import { ensureDbOpen, safeWorkspaceCwd } from "./dynamic-tools.js";
+import { ensureDbOpen, resolveCtxCwd } from "./dynamic-tools.js";
 
 function toolWorkspaceRoot(ctx: unknown): string {
-  if (ctx && typeof ctx === "object" && typeof (ctx as { cwd?: unknown }).cwd === "string") {
-    return (ctx as { cwd: string }).cwd;
-  }
-  return safeWorkspaceCwd();
+  return resolveCtxCwd(ctx);
 }
 
 export function registerQueryTools(pi: ExtensionAPI): void {

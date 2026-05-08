@@ -8,13 +8,10 @@
 import { Type } from "@sinclair/typebox";
 import type { ExtensionAPI } from "@gsd/pi-coding-agent";
 
-import { safeWorkspaceCwd } from "./dynamic-tools.js";
+import { resolveCtxCwd } from "./dynamic-tools.js";
 
 function toolWorkspaceRoot(ctx: unknown): string {
-  if (ctx && typeof ctx === "object" && typeof (ctx as { cwd?: unknown }).cwd === "string") {
-    return (ctx as { cwd: string }).cwd;
-  }
-  return safeWorkspaceCwd();
+  return resolveCtxCwd(ctx);
 }
 
 async function loadContextModePreferences(baseDir: string) {

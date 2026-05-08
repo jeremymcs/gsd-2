@@ -1797,10 +1797,12 @@ export function mergeMilestoneToMain(
       .map(s => ({
         id: s.id,
         title: stripGsdDisplayPrefix(s.title, s.id) ?? s.id,
-        tasks: getSliceTasks(milestoneId, s.id).map((task) => ({
-          id: task.id,
-          title: stripGsdDisplayPrefix(task.title, task.id) ?? task.id,
-        })),
+        tasks: getSliceTasks(milestoneId, s.id)
+          .filter((task) => task.status === "complete")
+          .map((task) => ({
+            id: task.id,
+            title: stripGsdDisplayPrefix(task.title, task.id) ?? task.id,
+          })),
       }));
   }
   // Fallback: parse roadmap content when DB is unavailable
