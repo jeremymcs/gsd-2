@@ -9,6 +9,7 @@
  */
 
 import type { ExtensionContext } from "@gsd/pi-coding-agent";
+import { truncateToWidth } from "@gsd/pi-tui";
 import type { GSDState } from "./types.js";
 import { runProviderChecks, summariseProviderIssues } from "./doctor-providers.js";
 import { runEnvironmentChecks } from "./doctor-environment.js";
@@ -136,7 +137,8 @@ export function initHealthWidget(ctx: ExtensionContext): void {
         if (!cachedLines || cachedWidth !== width) {
           cachedLines = buildHealthLines(data, width);
           if (data.projectState === "active") {
-            cachedLines = [...cachedLines, _theme.fg("dim", "  /gsd auto to run  ·  /gsd status for overview  ·  /gsd help")];
+            const hint = _theme.fg("dim", "  /gsd auto to run  ·  /gsd status for overview  ·  /gsd help");
+            cachedLines = [...cachedLines, truncateToWidth(hint, width, "…")];
           }
           cachedWidth = width;
         }

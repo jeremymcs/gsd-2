@@ -1565,12 +1565,16 @@ function buildResolverDeps(): WorktreeResolverDeps {
     readFileSync: (path: string, encoding: string) =>
       readFileSync(path, encoding as BufferEncoding),
     GitServiceImpl:
-      GitServiceImpl as unknown as WorktreeResolverDeps["GitServiceImpl"],
-    loadEffectiveGSDPreferences:
-      loadEffectiveGSDPreferences as unknown as WorktreeResolverDeps["loadEffectiveGSDPreferences"],
+      GitServiceImpl as WorktreeResolverDeps["GitServiceImpl"],
+    loadEffectiveGSDPreferences: () => {
+      const loaded = loadEffectiveGSDPreferences(s.basePath || undefined);
+      return loaded
+        ? { preferences: { git: loaded.preferences.git ? { ...loaded.preferences.git } : undefined } }
+        : undefined;
+    },
     invalidateAllCaches,
     captureIntegrationBranch,
-  };
+  } satisfies WorktreeResolverDeps;
 }
 
 /**

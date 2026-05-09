@@ -26,7 +26,11 @@ function makeTempDir(prefix: string): string {
 }
 
 function cleanup(dir: string): void {
-  try { rmSync(dir, { recursive: true, force: true }); } catch { /* best-effort */ }
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (err) {
+    console.warn(`Cleanup failed for ${dir}:`, err);
+  }
 }
 
 const baseState: GSDState = {
@@ -34,7 +38,11 @@ const baseState: GSDState = {
   activeMilestone: { id: "M001", title: "Milestone" },
   activeSlice: { id: "S01", title: "Slice" },
   activeTask: { id: "T01", title: "Task" },
-} as unknown as GSDState;
+  recentDecisions: [],
+  blockers: [],
+  nextAction: "",
+  registry: [],
+};
 
 const baseAccessors = {
   getAutoStartTime: () => 0,
@@ -45,6 +53,30 @@ const baseAccessors = {
   isSessionSwitching: () => false,
   getCurrentDispatchedModelId: () => null,
 };
+
+const fakeTui = { requestRender() {} };
+const fakeTheme = {
+  fg: (_color: string, text: string) => text,
+  bold: (text: string) => text,
+};
+
+type UpdateProgressContext = Parameters<typeof updateProgressWidget>[0];
+type MockUiOverrides = {
+  setWidget?: (key: string, factory: unknown) => void;
+  setHeader?: (factory: unknown) => void;
+  setStatus?: (key: string, value: string | undefined) => void;
+};
+
+function createMockContext(uiOverrides: MockUiOverrides = {}): UpdateProgressContext {
+  return {
+    hasUI: true,
+    ui: {
+      setWidget: uiOverrides.setWidget ?? (() => {}),
+      setHeader: uiOverrides.setHeader ?? (() => {}),
+      setStatus: uiOverrides.setStatus ?? (() => {}),
+    },
+  } as UpdateProgressContext;
+}
 
 // ── Header lifecycle ────────────────────────────────────────────────────
 
@@ -57,17 +89,12 @@ test("updateProgressWidget installs an EMPTY-rendering header (not undefined) �
   let setHeaderCallCount = 0;
 
   updateProgressWidget(
-    {
-      hasUI: true,
-      ui: {
-        setWidget() {},
-        setHeader(factory: any) {
-          setHeaderCallCount++;
-          captured.factory = factory;
-        },
-        setStatus() {},
+    createMockContext({
+      setHeader(factory) {
+        setHeaderCallCount++;
+        captured.factory = factory as CapturedSetHeader["factory"];
       },
-    } as any,
+    }),
     "execute-task",
     "M001/S01/T01",
     baseState,
@@ -91,14 +118,9 @@ test("updateProgressWidget clears the gsd-step wizard badge when auto-mode activ
   const statusCalls: Array<[string, string | undefined]> = [];
 
   updateProgressWidget(
-    {
-      hasUI: true,
-      ui: {
-        setWidget() {},
-        setHeader() {},
-        setStatus(key: string, value: string | undefined) { statusCalls.push([key, value]); },
-      },
-    } as any,
+    createMockContext({
+      setStatus(key, value) { statusCalls.push([key, value]); },
+    }),
     "execute-task",
     "M001/S01/T01",
     baseState,
@@ -119,10 +141,7 @@ test("updateProgressWidget gracefully no-ops when ctx.ui lacks setHeader/setStat
   // ctx.ui without setHeader / setStatus — must not throw.
   assert.doesNotThrow(() => {
     updateProgressWidget(
-      {
-        hasUI: true,
-        ui: { setWidget() {} },
-      } as any,
+      createMockContext(),
       "execute-task",
       "M001/S01/T01",
       baseState,
@@ -141,14 +160,11 @@ test("auto-dashboard widget render output includes Ctrl+N guidance when isStepMo
   let widgetFactory: ((tui: unknown, theme: unknown) => any) | undefined;
 
   updateProgressWidget(
-    {
-      hasUI: true,
-      ui: {
-        setWidget(_key: string, factory: any) { widgetFactory = factory; },
-        setHeader() {},
-        setStatus() {},
+    createMockContext({
+      setWidget(_key, factory) {
+        widgetFactory = factory as typeof widgetFactory;
       },
-    } as any,
+    }),
     "execute-task",
     "M001/S01/T01",
     baseState,
@@ -157,11 +173,6 @@ test("auto-dashboard widget render output includes Ctrl+N guidance when isStepMo
 
   assert.ok(widgetFactory, "widget factory must be installed");
 
-  const fakeTui = { requestRender() {} };
-  const fakeTheme = {
-    fg: (_color: string, text: string) => text,
-    bold: (text: string) => text,
-  };
   const component = widgetFactory!(fakeTui, fakeTheme);
   const lines = component.render(120);
 
@@ -179,14 +190,11 @@ test("auto-dashboard widget render output omits Ctrl+N guidance when isStepMode 
   let widgetFactory: ((tui: unknown, theme: unknown) => any) | undefined;
 
   updateProgressWidget(
-    {
-      hasUI: true,
-      ui: {
-        setWidget(_key: string, factory: any) { widgetFactory = factory; },
-        setHeader() {},
-        setStatus() {},
+    createMockContext({
+      setWidget(_key, factory) {
+        widgetFactory = factory as typeof widgetFactory;
       },
-    } as any,
+    }),
     "execute-task",
     "M001/S01/T01",
     baseState,
@@ -195,11 +203,6 @@ test("auto-dashboard widget render output omits Ctrl+N guidance when isStepMode 
 
   assert.ok(widgetFactory);
 
-  const fakeTui = { requestRender() {} };
-  const fakeTheme = {
-    fg: (_color: string, text: string) => text,
-    bold: (text: string) => text,
-  };
   const component = widgetFactory!(fakeTui, fakeTheme);
   const lines = component.render(120);
 
