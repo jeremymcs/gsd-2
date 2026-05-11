@@ -3,7 +3,7 @@
 **Status:** Not Adopted
 **Date:** 2026-03-16 (proposed window)
 **Closed:** 2026-05-10
-**Related:** ADR-001 (branchless worktree, superseded), ADR-016 trio, ADR-017 (drift-driven reconciliation)
+**Related:** [ADR-001](./ADR-001-branchless-worktree-architecture.md) (branchless worktree, superseded), [ADR-016 trio](./ADR-016-worktree-lifecycle-and-projection.md), [ADR-017](./ADR-017-state-reconciliation-drift-driven.md) (drift-driven reconciliation)
 
 ## Context
 
