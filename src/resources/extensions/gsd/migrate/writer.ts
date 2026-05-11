@@ -374,6 +374,8 @@ export function formatProject(content: string): string {
 /**
  * Format DECISIONS.md content.
  * If content is empty, produce the standard header.
+ * Non-empty content is expected to already use the canonical 8-column
+ * Decisions Register table emitted by deriveDecisions().
  */
 export function formatDecisions(content: string): string {
   if (!content || !content.trim()) {

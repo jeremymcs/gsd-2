@@ -336,8 +336,11 @@ function deriveDecisions(parsed: PlanningProject): string {
 
   decisions.forEach((decision, index) => {
     const id = padId('D', index + 1, 3);
-    const escaped = decision.replace(/\|/g, '\\|');
-    lines.push(`| ${id} | migration | migrated-summary | ${escaped} | ${escaped} | Migrated from legacy summary key-decisions | Yes | agent |`);
+    const escaped = decision
+      .replace(/\\/g, '\\\\')
+      .replace(/\|/g, '\\|')
+      .replace(/\r?\n/g, '\\n');
+    lines.push(`| ${id} | migration | migrated-summary | ${escaped} | (migrated) | Migrated from legacy summary key-decisions | Yes | agent |`);
   });
 
   return lines.join('\n') + '\n';

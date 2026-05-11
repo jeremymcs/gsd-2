@@ -542,22 +542,30 @@ test('Scenario 12: Vision derivation', () => {
 // ─── Scenario 13: Decisions content from summaries ─────────────────────────
 
 test('Scenario 13: Decisions content', () => {
+  const summary = makeSummary('01');
+  summary.frontmatter['key-decisions'] = ['Use A | B\nThen \\ C'];
 
   const project = emptyProject({
     roadmap: flatRoadmap([roadmapEntry(1, 'decision-phase', true)]),
     phases: {
       '1-decision-phase': makePhase('1-decision-phase', 1, 'decision-phase', {
         plans: { '01': makePlan('01') },
-        summaries: { '01': makeSummary('01') },
+        summaries: { '01': summary },
       }),
     },
   });
 
   const result = transformToGSD(project);
 
-  assert.ok(result.decisionsContent.includes('decision-01'), 'decisions: extracts key-decisions from summaries');
+  assert.ok(result.decisionsContent.includes('Use A \\| B\\nThen \\\\ C'), 'decisions: sanitizes key-decisions table cell');
   assert.ok(result.decisionsContent.includes('| D001 |'), 'decisions: writes DB-importable decision ID');
   assert.ok(result.decisionsContent.includes('| # | When | Scope | Decision | Choice | Rationale | Revisable? | Made By |'), 'decisions: writes canonical table header');
+  assert.ok(result.decisionsContent.includes('| (migrated) |'), 'decisions: writes distinct migrated choice placeholder');
+  assert.deepStrictEqual(
+    result.decisionsContent.split('\n').filter((line) => line.trim().startsWith('| D001 |')).length,
+    1,
+    'decisions: embedded newline does not split row',
+  );
 });
 
 // ─── Scenario 14: No undefined values in output ───────────────────────────

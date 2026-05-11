@@ -350,6 +350,7 @@ test('Full pipeline: parse → transform → preview → write → deriveState',
       assert.ok(state.progress!.tasks !== undefined, 'pipeline: deriveState has tasks progress');
 
     } finally {
+      closeDatabase();
       rmSync(base, { recursive: true, force: true });
       rmSync(writeTarget, { recursive: true, force: true });
     }
