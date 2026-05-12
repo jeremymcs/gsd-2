@@ -94,6 +94,7 @@ const WORKFLOW_GSD_TOOL_NAMES = [
   ...Object.values(AUTO_UNIT_SCOPED_TOOLS).flat(),
 ].filter(isGsdManagedTool);
 
+// General workflow scoping is conservative; unit-specific builders opt into tools like subagent.
 function isGsdManagedTool(name: string): boolean {
   return name.startsWith("gsd_") || name === "memory_query" || name === "capture_thought" || name === "gsd_graph";
 }

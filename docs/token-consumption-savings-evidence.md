@@ -10,10 +10,10 @@ This PR uses `PI_TOKEN_AUDIT=1` audit output to target repeat prompt cost at the
 | Log | Rows | Estimated input tokens avg | Tool count avg | Tool schema chars avg | Custom chars avg | Notes |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | `/tmp/gsd-token-audit-min-tools.log` | n/a | 45,504 | 44 | 43,971 | 55,657 | Initial minimal-tools sample still had high custom/context cost. |
-| `/tmp/gsd-token-audit-min-tools-context-cap.log` | 14 | n/a | 138 | 137,296 | 20,210 | Context cap helped custom payloads, but full tool schema still dominated. |
-| `/tmp/gsd-token-audit-auto-tools-before-start2.log` | 12 | n/a | 105 | 80,272 | 25,025 | Auto still carried broad workflow/tool surfaces. |
-| `/tmp/gsd-token-audit-auto-tools-before-start3.log` | 7 | n/a | 15 | 17,224 | 22,026 | Strict auto scoping brought normal auto turns near the target surface. |
-| `/tmp/gsd-token-audit-auto-tools-before-start4.log` | 4 | n/a | 15 | 16,313 | 38,707 | Auto tool schema stayed low; custom closeout context still spiked. |
+| `/tmp/gsd-token-audit-min-tools-context-cap.log` | 14 | not captured in this run | 138 | 137,296 | 20,210 | Context cap helped custom payloads, but full tool schema still dominated. |
+| `/tmp/gsd-token-audit-auto-tools-before-start2.log` | 12 | not captured in this run | 105 | 80,272 | 25,025 | Auto still carried broad workflow/tool surfaces. |
+| `/tmp/gsd-token-audit-auto-tools-before-start3.log` | 7 | not captured in this run | 15 | 17,224 | 22,026 | Strict auto scoping brought normal auto turns near the target surface. |
+| `/tmp/gsd-token-audit-auto-tools-before-start4.log` | 4 | not captured in this run | 15 | 16,313 | 38,707 | Auto tool schema stayed low; custom closeout context still spiked. |
 
 Run 5 exposed the remaining workflow bucket:
 

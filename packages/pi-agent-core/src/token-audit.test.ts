@@ -78,6 +78,20 @@ test("buildTokenAuditSummary reports payload section sizes without content field
 	assert.ok(!JSON.stringify(summary).includes("memory block"));
 });
 
+test("buildTokenAuditSummary treats non-LLM roles as custom audit messages", () => {
+	const summary = buildTokenAuditSummary(
+		{ messages: [{ role: "user", content: "prompt", timestamp: 1 }] },
+		[
+			{ role: "user", content: "prompt", timestamp: 1 },
+			{ role: "futureInternalEvent", content: "internal detail", timestamp: 2 } as unknown as AgentMessage,
+		],
+	);
+
+	assert.deepEqual(summary.largestCustomMessages, [
+		{ index: 1, role: "futureInternalEvent", customType: undefined, chars: summary.largestCustomMessages[0].chars },
+	]);
+});
+
 test("maybeLogTokenAudit is opt-in and emits metadata only", () => {
 	const original = process.env.PI_TOKEN_AUDIT;
 	const originalWrite = process.stderr.write;

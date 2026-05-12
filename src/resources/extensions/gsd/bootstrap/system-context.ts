@@ -297,10 +297,11 @@ function getContextMessageCharLimit(): number | null {
 }
 
 function limitContextMessageContent(content: string, limit: number | null): string {
-  if (!limit || content.length <= limit) return content;
-  const suffix = "\n\n[GSD Context Truncated]\nFull context is available from the referenced .gsd files and tools; read on demand only if this excerpt lacks required evidence.";
-  const headBudget = Math.max(0, limit - suffix.length);
-  return `${content.slice(0, headBudget).trimEnd()}${suffix}`;
+  return truncateWithSuffix(
+    content,
+    limit,
+    "\n\n[GSD Context Truncated]\nFull context is available from the referenced .gsd files and tools; read on demand only if this excerpt lacks required evidence.",
+  );
 }
 
 function markMemoryContextSupplied(memoryContent: string): string {
@@ -428,8 +429,15 @@ function getKnowledgeCharLimit(): number | null {
 }
 
 function limitKnowledgeBlock(content: string, limit: number | null): string {
+  return truncateWithSuffix(
+    content,
+    limit,
+    "\n\n[Knowledge Truncated]\nFull KNOWLEDGE.md content remains available at the source path(s) above; read on demand only if this excerpt lacks a required rule.",
+  );
+}
+
+function truncateWithSuffix(content: string, limit: number | null, suffix: string): string {
   if (!limit || content.length <= limit) return content;
-  const suffix = "\n\n[Knowledge Truncated]\nFull KNOWLEDGE.md content remains available at the source path(s) above; read on demand only if this excerpt lacks a required rule.";
   const headBudget = Math.max(0, limit - suffix.length);
   return `${content.slice(0, headBudget).trimEnd()}${suffix}`;
 }

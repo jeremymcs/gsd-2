@@ -4,7 +4,10 @@
 import type { Context, ImageContent, Message, TextContent, Tool } from "@gsd/pi-ai";
 import type { AgentMessage } from "./types.js";
 
+// Rough char-to-token heuristic. JSON serialization includes field names and
+// wrappers, so estimatedInputTokens intentionally errs high.
 const CHARS_PER_TOKEN = 4;
+const LLM_MESSAGE_ROLES = new Set(["user", "assistant", "toolResult"]);
 const LARGEST_MESSAGE_LIMIT = 5;
 const LARGEST_TOOL_LIMIT = 10;
 const LARGEST_CUSTOM_MESSAGE_LIMIT = 5;
@@ -258,7 +261,7 @@ function countContentChars(content: string | (TextContent | ImageContent)[]): nu
 
 function isCustomOrInjectedMessage(message: AgentMessage): boolean {
 	const role = (message as { role?: unknown }).role;
-	return role === "custom" || role === "bashExecution" || role === "branchSummary" || role === "compactionSummary";
+	return typeof role === "string" && !LLM_MESSAGE_ROLES.has(role);
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

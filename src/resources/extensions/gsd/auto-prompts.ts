@@ -635,7 +635,7 @@ export async function buildSliceSummaryExcerpt(
     );
     return lines.join("\n");
   } catch {
-    // Defensive — any parse failure falls back to full inline.
+    // Defensive — parse failures fall back to a capped malformed-summary excerpt.
     return `### ${sid} Summary\nSource: \`${relPath}\`\n\n${capMalformedSummary(content, relPath)}`;
   }
 }
