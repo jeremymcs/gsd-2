@@ -148,6 +148,20 @@ export async function checkGitHealth(
 
         if (shouldFix("worktree_empty_with_project_content")) {
           try {
+            let cwd = basePath;
+            try {
+              cwd = process.cwd();
+            } catch {
+              cwd = basePath;
+            }
+            if (isSameOrNestedPath(cwd, wt.path)) {
+              try {
+                process.chdir(basePath);
+              } catch {
+                fixesApplied.push(`skipped recreating worktree at ${wt.path} (cannot chdir to basePath)`);
+                continue;
+              }
+            }
             nativeWorktreeRemove(basePath, wt.path, true);
             const recreated = createWorktree(basePath, milestoneId, {
               branch: wt.branch,
@@ -160,7 +174,7 @@ export async function checkGitHealth(
             if (reset.status !== 0) {
               throw new Error(reset.stderr || reset.error?.message || "git reset --hard failed");
             }
-            fixesApplied.push(`recreated empty worktree ${wt.path}`);
+            fixesApplied.push(`recreated worktree at ${wt.path}`);
           } catch {
             fixesApplied.push(`failed to recreate empty worktree ${wt.path}`);
           }

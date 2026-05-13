@@ -4,7 +4,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -33,6 +33,8 @@ function makeRepo(): string {
 test("doctor fix recreates an empty registered milestone worktree", async (t) => {
   const base = makeRepo();
   t.after(() => rmSync(base, { recursive: true, force: true }));
+  const originalCwd = process.cwd();
+  t.after(() => process.chdir(originalCwd));
 
   createWorktree(base, "M001", { branch: "milestone/M001" });
   const wtPath = worktreePath(base, "M001");
@@ -46,6 +48,7 @@ test("doctor fix recreates an empty registered milestone worktree", async (t) =>
   assert.ok(existsSync(join(wtPath, ".git")), "test setup keeps registered worktree marker");
   assert.equal(existsSync(join(wtPath, "package.json")), false, "test setup removes project content");
 
+  process.chdir(wtPath);
   const report = await runGSDDoctor(base, {
     fix: true,
     fixLevel: "all",
@@ -57,9 +60,10 @@ test("doctor fix recreates an empty registered milestone worktree", async (t) =>
     "doctor reports the empty worktree",
   );
   assert.ok(
-    report.fixesApplied.some((fix) => fix.includes("recreated empty worktree")),
+    report.fixesApplied.some((fix) => fix.includes("recreated worktree at")),
     "doctor applies the repair",
   );
+  assert.equal(realpathSync(process.cwd()), realpathSync(base), "doctor moves out of the worktree before removing it");
   assert.ok(existsSync(join(wtPath, "package.json")), "worktree content is restored");
   assert.ok(existsSync(join(wtPath, "milestone-note.txt")), "branch content is restored");
 });
