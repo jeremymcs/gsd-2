@@ -483,6 +483,43 @@ Step mode is the on-ramp. Auto mode is the highway.
 npm install -g gsd-pi
 ```
 
+### Upgrade from older GSD-2 installs
+
+**Symptoms:** `gsd` exits with a version or managed-resource mismatch, or an old global `gsd-pi` install still shadows the new package.
+
+**Fix:** Clear stale local update/resource state, then install the scoped package:
+
+macOS / Linux:
+
+```bash
+rm -f ~/.gsd/.update-check ~/.gsd/agent/managed-resources.json
+npm install -g @opengsd/gsd-pi@latest
+```
+
+Windows PowerShell:
+
+```powershell
+Remove-Item "$env:USERPROFILE\.gsd\.update-check" -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:USERPROFILE\.gsd\agent\managed-resources.json" -Force -ErrorAction SilentlyContinue
+npm install -g @opengsd/gsd-pi@latest
+```
+
+Windows Command Prompt:
+
+```bat
+del "%USERPROFILE%\.gsd\.update-check" 2>nul
+del "%USERPROFILE%\.gsd\agent\managed-resources.json" 2>nul
+npm install -g @opengsd/gsd-pi@latest
+```
+
+Or run the installer from the new package on any OS:
+
+```bash
+npx @opengsd/gsd-pi@latest
+```
+
+After that, routine upgrades use `gsd upgrade`, `gsd update`, or `/gsd update` in a session.
+
 ### Log in to a provider
 
 First, choose your LLM provider:
